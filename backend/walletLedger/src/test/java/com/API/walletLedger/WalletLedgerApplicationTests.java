@@ -1,10 +1,10 @@
-package com.API.walletLeger;
+package com.API.walletLedger;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class WalletLegerApplicationTests {
+class WalletLedgerApplicationTests {
 
 	@Test
 	void contextLoads() {
