@@ -1,0 +1,18 @@
+CREATE TABLE transactions (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    idempotency_key VARCHAR(100) UNIQUE NOT NULL,
+    amount DECIMAL(15, 2) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    description VARCHAR(255),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+CREATE TABLE ledger_entries (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    transaction_id UUID REFERENCES transactions(id) ON DELETE RESTRICT NOT NULL,
+    account_id UUID REFERENCES accounts(id) ON DELETE RESTRICT NOT NULL,
+    entry_type VARCHAR(10) NOT NULL,
+    amount DECIMAL(15, 2) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
