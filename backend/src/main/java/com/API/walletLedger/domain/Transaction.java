@@ -22,7 +22,7 @@ public class Transaction {
     private UUID id;
 
     @Column(name = "idempotency_key", nullable = false, unique = true,length = 100)
-    private String idempotenceKey;
+    private String idempotencyKey;
 
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal amount;

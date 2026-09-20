@@ -1,0 +1,38 @@
+### Diretórios do Maven & Compilação
+**/target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+### IDEs e Editores
+.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/
+*.swp
+*.bak
+*~
+
+### Logs
+*.log
+**/logs/
+
+### Sistema Operacional
+.DS_Store
+Thumbs.db
+
+### Frontend (Futuro Angular)
+**/node_modules/
+**/dist/
+.angular/
+
+### Ambientes e Secrets
+.env
+.env.local
