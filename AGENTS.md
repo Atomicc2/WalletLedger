@@ -136,6 +136,16 @@ Todos os commits devem seguir o padrão:
   - `.gitignore` robusto cobrindo builds, Maven, IDEs e dependências futuras.
   - `README.md` documentado.
   - `AGENTS.md` atualizado com padrões IA-First e Conventional Commits.
+- [/] **Testes Automatizados (Fase 2.5 — Em Andamento):**
+  - Bloco 1 ✅ — `LedgerServiceTest`: 5 testes unitários com Mockito passando (`Tests run: 5, Failures: 0`).
+    - `deposit_deveCriarTransacaoEDuasEntradasContabeis`
+    - `deposit_deveRetornarTransacaoExistente_quandoIdempotencyKeyDuplicada`
+    - `transfer_deveLancarExcecao_quandoSaldoInsuficiente`
+    - `transfer_deveLancarExcecao_quandoContaOrigemIgualDestino`
+    - `transfer_deveCriarDuasEntradasComMesmoValor` (verifica invariante contábil via ArgumentCaptor)
+  - Bloco 2 ⏳ — `JwtServiceTest`: **PRÓXIMA ETAPA** (testes unitários do JwtService).
+  - Bloco 3 ⏳ — `LedgerEntryRepositoryTest`: testes de Slice JPA com `@DataJpaTest` + H2.
+  - Bloco 4 ⏳ — `TransactionControllerIT`: testes de integração com `@SpringBootTest` + `MockMvc`.
 
 ---
 
@@ -181,8 +191,8 @@ Todos os commits devem seguir o padrão:
 - `login_deveRetornar200EToken_quandoCredenciaisValidas` — autenticação.
 - `login_deveRetornar401_quandoSenhaErrada` — credencial inválida.
 
-1. **Passo 2.5.1:** Testes unitários do `LedgerService` com Mockito. *(Pendente)*
-2. **Passo 2.5.2:** Testes unitários do `JwtService`. *(Pendente)*
+1. **Passo 2.5.1:** Testes unitários do `LedgerService` com Mockito. *(Concluído — commit `e838eda`)*
+2. **Passo 2.5.2:** Testes unitários do `JwtService`. *(Pendente — PRÓXIMA ETAPA)*
 3. **Passo 2.5.3:** Testes de Slice JPA com `@DataJpaTest` e H2. *(Pendente)*
 4. **Passo 2.5.4:** Testes de Integração com `@SpringBootTest` + `MockMvc`. *(Pendente)*
 
