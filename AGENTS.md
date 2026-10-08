@@ -120,6 +120,18 @@ Todos os commits devem seguir o padrão:
   - `UserDetailsServiceImpl`: integração de usuários com `UserDetailsService` do Spring Security.
   - `JwtAuthenticationFilter`: interceptação de headers `Authorization: Bearer <token>` e injeção de `SecurityContext`.
   - `AuthController` e `AuthService`: endpoint `POST /api/auth/login` retornando `accessToken`, `tokenType: Bearer` e `expiresIn`.
+- [x] **Motor Contábil do Ledger (Fase 2):**
+  - DTOs do core financeiro: `DepositRequest`, `TransferRequest`, `TransactionResponse`, `LedgerEntryResponse` e `BalanceResponse`.
+  - Concorrência pessimista: `AccountRepository.findByIdForUpdate` usando `@Lock(LockModeType.PESSIMISTIC_WRITE)` (`SELECT ... FOR UPDATE`).
+  - `LedgerService`:
+    - Operação de depósito atômico com débito na conta `SYSTEM` e crédito na conta do usuário.
+    - Operação de transferência atômica com validação de saldo no PostgreSQL e bloqueio pessimista de concorrência.
+    - Idempotência ponta a ponta via `idempotency_key`.
+    - Garantia da invariante de dupla entrada contábil (soma algébrica zero).
+  - Camada Web:
+    - `TransactionController`: `POST /api/transactions/deposit` e `POST /api/transactions/transfer`.
+    - `AccountController`: `GET /api/accounts/{id}/balance` e `GET /api/accounts/{id}/statement`.
+  - Testes ponta a ponta validados com emissão de token JWT, depósitos, transferências, proteção contra gasto duplo e idempotência.
 - [x] **Governança:**
   - `.gitignore` robusto cobrindo builds, Maven, IDEs e dependências futuras.
   - `README.md` documentado.
@@ -135,16 +147,13 @@ Todos os commits devem seguir o padrão:
 3. **Passo 1.3:** Testar o fluxo de registro e persistência na prática. *(Concluído)*
 4. **Passo 1.4:** Implementar autenticação via JWT (`JwtService`, `JwtAuthenticationFilter`, `POST /api/auth/login`). *(Concluído)*
 
-### Fase 2: Motor Contábil do Ledger (Core Financeiro - Próxima Etapa)
-1. **Passo 2.1:** DTOs de transação (`DepositRequest`, `TransferRequest`, `TransactionResponse`).
-2. **Passo 2.2:** `LedgerService` ou `TransactionService`:
-   - Validação de idempotência (`findByIdempotencyKey`).
-   - Operação de depósito (débito da conta `SYSTEM`, crédito na conta do usuário).
-   - Operação de transferência entre usuários com validação de saldo e concorrência (`@Lock(LockModeType.PESSIMISTIC_WRITE)`).
-3. **Passo 2.3:** Criação e validação atômica de entradas (`LedgerEntry`).
-4. **Passo 2.4:** `TransactionController` e `AccountController` (consulta de extrato e saldo em tempo real).
+### Fase 2: Motor Contábil do Ledger (Concluída)
+1. **Passo 2.1:** DTOs de transação (`DepositRequest`, `TransferRequest`, `TransactionResponse`). *(Concluído)*
+2. **Passo 2.2:** `LedgerService` com idempotência e locking pessimista (`@Lock(LockModeType.PESSIMISTIC_WRITE)`). *(Concluído)*
+3. **Passo 2.3:** Criação e validação atômica de entradas contábeis (`LedgerEntry`). *(Concluído)*
+4. **Passo 2.4:** `TransactionController` e `AccountController` (extrato e saldo em tempo real). *(Concluído)*
 
-### Fase 3: Processamento Assíncrono e Resiliência
+### Fase 3: Processamento Assíncrono e Resiliência (Próxima Etapa)
 1. **Passo 3.1:** Simulação de webhook/fila assíncrona para liquidação de transações pendentes.
 2. **Passo 3.2:** Tratamento de estornos (`REVERSED`) através de lançamentos contábeis compensatórios.
 3. **Passo 3.3:** Tratamento global de exceções (`@RestControllerAdvice` com Problem Details / RFC 7807).
