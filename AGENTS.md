@@ -153,6 +153,39 @@ Todos os commits devem seguir o padrão:
 3. **Passo 2.3:** Criação e validação atômica de entradas contábeis (`LedgerEntry`). *(Concluído)*
 4. **Passo 2.4:** `TransactionController` e `AccountController` (extrato e saldo em tempo real). *(Concluído)*
 
+### Fase 2.5: Testes Automatizados (Em Andamento)
+
+**Estratégia:** Pirâmide de testes com 3 camadas — Unitários (base), Slice JPA (meio), Integração MockMvc (topo).
+**Ferramentas:** JUnit 5 + Mockito (já inclusas no `spring-boot-starter-test`) + H2 em memória para testes JPA.
+
+#### Bloco 1 — Testes Unitários do `LedgerService` (classe: `LedgerServiceTest`)
+- `deposit_deveCriarTransacaoEDuasEntradasContabeis` — cenário feliz de depósito.
+- `deposit_deveRetornarTransacaoExistente_quandoIdempotencyKeyDuplicada` — idempotência.
+- `transfer_deveLancarExcecao_quandoSaldoInsuficiente` — regra de saldo.
+- `transfer_deveLancarExcecao_quandoContaOrigemIgualDestino` — auto-transferência proibida.
+- `transfer_deveCriarDuasEntradasComSomaAlgebricaZero` — invariante contábil.
+
+#### Bloco 2 — Testes Unitários do `JwtService` (classe: `JwtServiceTest`)
+- `gerarToken_deveRetornarTokenValido` — token não nulo e bem-formado.
+- `extrairEmail_deveRetornarEmailCorreto` — parsing de subject.
+- `validarToken_deveRetornarTrue_quandoTokenValido` — validação positiva.
+- `validarToken_deveRetornarFalse_quandoTokenExpirado` — expiração.
+
+#### Bloco 3 — Testes de Slice JPA do `LedgerEntryRepository` (classe: `LedgerEntryRepositoryTest`)
+- `getBalanceByAccountId_deveRetornarSaldoZero_quandoSemEntradas` — conta nova.
+- `getBalanceByAccountId_deveCalcularSaldoCorreto_comDebitosECreditos` — query JPQL agregada.
+
+#### Bloco 4 — Testes de Integração MockMvc (classe: `TransactionControllerIT`)
+- `deposit_deveRetornar401_quandoSemToken` — proteção JWT.
+- `deposit_deveRetornar200_quandoTokenValido` — fluxo completo autenticado.
+- `login_deveRetornar200EToken_quandoCredenciaisValidas` — autenticação.
+- `login_deveRetornar401_quandoSenhaErrada` — credencial inválida.
+
+1. **Passo 2.5.1:** Testes unitários do `LedgerService` com Mockito. *(Pendente)*
+2. **Passo 2.5.2:** Testes unitários do `JwtService`. *(Pendente)*
+3. **Passo 2.5.3:** Testes de Slice JPA com `@DataJpaTest` e H2. *(Pendente)*
+4. **Passo 2.5.4:** Testes de Integração com `@SpringBootTest` + `MockMvc`. *(Pendente)*
+
 ### Fase 3: Processamento Assíncrono e Resiliência (Próxima Etapa)
 1. **Passo 3.1:** Simulação de webhook/fila assíncrona para liquidação de transações pendentes.
 2. **Passo 3.2:** Tratamento de estornos (`REVERSED`) através de lançamentos contábeis compensatórios.
