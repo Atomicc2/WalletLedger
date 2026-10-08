@@ -143,9 +143,19 @@ Todos os commits devem seguir o padrão:
     - `transfer_deveLancarExcecao_quandoSaldoInsuficiente`
     - `transfer_deveLancarExcecao_quandoContaOrigemIgualDestino`
     - `transfer_deveCriarDuasEntradasComMesmoValor` (verifica invariante contábil via ArgumentCaptor)
-  - Bloco 2 ⏳ — `JwtServiceTest`: **PRÓXIMA ETAPA** (testes unitários do JwtService).
-  - Bloco 3 ⏳ — `LedgerEntryRepositoryTest`: testes de Slice JPA com `@DataJpaTest` + H2.
+  - Bloco 2 ✅ — `JwtServiceTest`: 6 testes unitários passando (`Tests run: 6, Failures: 0`).
+    - `gerarToken_deveRetornarTokenValido`
+    - `extrairEmail_deveRetornarEmailCorreto`
+    - `validarToken_deveRetornarTrue_quandoTokenValido`
+    - `validarToken_deveRetornarFalse_quandoEmailNaoBate`
+    - `validarToken_deveRetornarFalse_quandoTokenExpirado`
+    - `isTokenExpired_deveRetornarFalse_quandoTokenValido`
+    - Estratégia: `ReflectionTestUtils.setField()` injeta `secretKey` e `jwtExpirationMs` manualmente — **não** usar `@Value` em classe de teste sem contexto Spring (o campo fica `null` e todos os testes falham com `Decode argument cannot be null`).
+    - Comportamento documentado: o JJWT lança `ExpiredJwtException` ao parsear claims de token vencido; `isTokenValid` captura `JwtException` e devolve `false`.
+  - Bloco 3 ⏳ — `LedgerEntryRepositoryTest`: testes de Slice JPA com `@DataJpaTest` + H2. **PRÓXIMA ETAPA**
   - Bloco 4 ⏳ — `TransactionControllerIT`: testes de integração com `@SpringBootTest` + `MockMvc`.
+- ⚠️ **Suíte completa atual: `Tests run: 12, Failures: 0, Errors: 0` — `BUILD SUCCESS` (5 LedgerService + 6 JwtService + 1 contextLoads).**
+- ⚠️ **O wrapper Maven está quebrado:** falta `backend/.mvn/wrapper/maven-wrapper.properties`, então `./mvnw` falha. Usar **`mvn` do sistema** (3.9.16) a partir de `backend/`.
 
 ---
 
@@ -175,11 +185,14 @@ Todos os commits devem seguir o padrão:
 - `transfer_deveLancarExcecao_quandoContaOrigemIgualDestino` — auto-transferência proibida.
 - `transfer_deveCriarDuasEntradasComSomaAlgebricaZero` — invariante contábil.
 
-#### Bloco 2 — Testes Unitários do `JwtService` (classe: `JwtServiceTest`)
-- `gerarToken_deveRetornarTokenValido` — token não nulo e bem-formado.
+#### Bloco 2 — Testes Unitários do `JwtService` (classe: `JwtServiceTest`) — *(Concluído — commit `03fee07`)*
+- `gerarToken_deveRetornarTokenValido` — token não nulo, 3 partes e subject recuperável (payload é base64url, não comparar e-mail em texto puro).
 - `extrairEmail_deveRetornarEmailCorreto` — parsing de subject.
 - `validarToken_deveRetornarTrue_quandoTokenValido` — validação positiva.
-- `validarToken_deveRetornarFalse_quandoTokenExpirado` — expiração.
+- `validarToken_deveRetornarFalse_quandoEmailNaoBate` — e-mail divergente.
+- `validarToken_deveRetornarFalse_quandoTokenExpirado` — expiração via `jwtExpirationMs` negativo (token nasce vencido, sem `Thread.sleep`).
+- `isTokenExpired_deveRetornarFalse_quandoTokenValido` — token dentro da validade.
+- **Ajuste de projeto:** `JwtService.generateToken(User)` exige `user.getId()` e `user.getEmail()` não nulos (`user.getId().toString()` NPEia sem id) — os testes sempre montam User completo.
 
 #### Bloco 3 — Testes de Slice JPA do `LedgerEntryRepository` (classe: `LedgerEntryRepositoryTest`)
 - `getBalanceByAccountId_deveRetornarSaldoZero_quandoSemEntradas` — conta nova.
@@ -192,11 +205,11 @@ Todos os commits devem seguir o padrão:
 - `login_deveRetornar401_quandoSenhaErrada` — credencial inválida.
 
 1. **Passo 2.5.1:** Testes unitários do `LedgerService` com Mockito. *(Concluído — commit `e838eda`)*
-2. **Passo 2.5.2:** Testes unitários do `JwtService`. *(Pendente — PRÓXIMA ETAPA)*
-3. **Passo 2.5.3:** Testes de Slice JPA com `@DataJpaTest` e H2. *(Pendente)*
+2. **Passo 2.5.2:** Testes unitários do `JwtService`. *(Concluído — commit `03fee07`)*
+3. **Passo 2.5.3:** Testes de Slice JPA com `@DataJpaTest` e H2. *(Pendente — PRÓXIMA ETAPA)*
 4. **Passo 2.5.4:** Testes de Integração com `@SpringBootTest` + `MockMvc`. *(Pendente)*
 
-### Fase 3: Processamento Assíncrono e Resiliência (Próxima Etapa)
+### Fase 3: Processamento Assíncrono e Resiliência (Após a Fase 2.5)
 1. **Passo 3.1:** Simulação de webhook/fila assíncrona para liquidação de transações pendentes.
 2. **Passo 3.2:** Tratamento de estornos (`REVERSED`) através de lançamentos contábeis compensatórios.
 3. **Passo 3.3:** Tratamento global de exceções (`@RestControllerAdvice` com Problem Details / RFC 7807).
