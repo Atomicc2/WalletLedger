@@ -12,4 +12,11 @@ public class SecurityBeansConfig {
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
+
+    @Bean
+    public org.springframework.security.authentication.AuthenticationManager authenticationManager(
+        org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration config
+    ) throws Exception {
+        return config.getAuthenticationManager();
+    }
 }

@@ -113,6 +113,13 @@ Todos os commits devem seguir o padrão:
   - `UserController`: endpoint `POST /api/users` retornando `201 Created` e validando campos com `@Valid`.
   - `SecurityConfig`: liberação do endpoint de registro público e configuração stateless de sessão HTTP.
   - Teste ponta a ponta executado e validado com persistência real no PostgreSQL.
+- [x] **Autenticação & Segurança JWT:**
+  - Dependências oficiais JJWT 0.12.6 configuradas no `pom.xml`.
+  - Propriedades de chave HMAC-SHA256 (256 bits) e tempo de expiração em `application.properties`.
+  - `JwtService`: geração de token assinado, extração segura de claims e validação de expiração.
+  - `UserDetailsServiceImpl`: integração de usuários com `UserDetailsService` do Spring Security.
+  - `JwtAuthenticationFilter`: interceptação de headers `Authorization: Bearer <token>` e injeção de `SecurityContext`.
+  - `AuthController` e `AuthService`: endpoint `POST /api/auth/login` retornando `accessToken`, `tokenType: Bearer` e `expiresIn`.
 - [x] **Governança:**
   - `.gitignore` robusto cobrindo builds, Maven, IDEs e dependências futuras.
   - `README.md` documentado.
@@ -122,19 +129,13 @@ Todos os commits devem seguir o padrão:
 
 ## 🗺️ Roadmap de Implementação
 
-### Fase 1: Finalização da Camada de Usuários & Segurança (Próximos Passos Imediatos)
+### Fase 1: Finalização da Camada de Usuários & Segurança (Concluída)
 1. **Passo 1.1:** Criar `UserController` para expor `POST /api/users` retornando `201 Created`. *(Concluído)*
 2. **Passo 1.2:** Configurar o Spring Security (`SecurityConfig` com `SecurityFilterChain`) liberando rotas públicas de registro e desabilitando CSRF para API stateless. *(Concluído)*
 3. **Passo 1.3:** Testar o fluxo de registro e persistência na prática. *(Concluído)*
-4. **Passo 1.4:** Implementar autenticação via JWT:
-   - Adicionar dependências do JJWT (`jjwt-api`, `jjwt-impl`, `jjwt-jackson`) no `pom.xml`.
-   - DTOs de login (`LoginRequest`, `TokenResponse`).
-   - Serviço gerador e validador de tokens JWT (`JwtService`).
-   - Implementação de `UserDetailsService` para carregar dados do usuário pelo email.
-   - Filtro de requisições de segurança (`JwtAuthenticationFilter`).
-   - Endpoint de login `POST /api/auth/login`.
+4. **Passo 1.4:** Implementar autenticação via JWT (`JwtService`, `JwtAuthenticationFilter`, `POST /api/auth/login`). *(Concluído)*
 
-### Fase 2: Motor Contábil do Ledger (Core Financeiro)
+### Fase 2: Motor Contábil do Ledger (Core Financeiro - Próxima Etapa)
 1. **Passo 2.1:** DTOs de transação (`DepositRequest`, `TransferRequest`, `TransactionResponse`).
 2. **Passo 2.2:** `LedgerService` ou `TransactionService`:
    - Validação de idempotência (`findByIdempotencyKey`).
