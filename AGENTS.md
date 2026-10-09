@@ -153,6 +153,14 @@ Todos os commits devem seguir o padrão:
     - `TransactionController`: `POST /api/transactions/deposit` e `POST /api/transactions/transfer`.
     - `AccountController`: `GET /api/accounts/{id}/balance` e `GET /api/accounts/{id}/statement`.
   - Testes ponta a ponta validados com emissão de token JWT, depósitos, transferências, proteção contra gasto duplo e idempotência.
+- [x] **Tratamento Global de Exceções (Fase 3.3):**
+  - `GlobalExceptionHandler` (`@RestControllerAdvice`) converte exceções de negócio em HTTP + RFC 7807 (`ProblemDetail`, media type `application/problem+json`):
+    - `MethodArgumentNotValidException` (falha de `@Valid`) → **400** com mapa `errors` (campo → mensagem);
+    - `IllegalArgumentException` (saldo insuficiente, e-mail duplicado, conta não encontrada) → **400**;
+    - `IllegalStateException` (conta não ativa, conta mestre ausente) → **409 Conflict**;
+    - `BadCredentialsException` (login) → **401** com corpo explicativo.
+  - Sem `@ExceptionHandler(Exception.class)` "catch-all" de propósito: um handler genérico capturaria exceções do próprio Spring (ex.: rota inexistente) e viraria 500; o fallback padrão do Spring Boot continua cuidando disso.
+  - Testes: `GlobalExceptionHandlerIntegrationTest` — 4 cenários.
 - [x] **Governança:**
   - `.gitignore` robusto cobrindo builds, Maven, IDEs e dependências futuras.
   - `README.md` documentado.
@@ -185,7 +193,7 @@ Todos os commits devem seguir o padrão:
     - `login_deveRetornar200EToken_quandoCredenciaisValidas`
     - `login_deveRetornar401_quandoSenhaErrada`
     - Estratégia: `@SpringBootTest` + `@AutoConfigureMockMvc` + `@Transactional` (rollback por teste no Postgres real).
-- ⚠️ **Suíte completa atual: `Tests run: 18, Failures: 0, Errors: 0` — `BUILD SUCCESS` (5 LedgerService + 6 JwtService + 2 LedgerEntryRepository + 4 integração + 1 contextLoads).**
+- ⚠️ **Suíte completa atual: `Tests run: 22, Failures: 0, Errors: 0` — `BUILD SUCCESS` (5 LedgerService + 6 JwtService + 2 LedgerEntryRepository + 4 integração + 4 exceções + 1 contextLoads).**
 - ⚠️ **O wrapper Maven está quebrado:** falta `backend/.mvn/wrapper/maven-wrapper.properties`, então `./mvnw` falha. Usar **`mvn` do sistema** (3.9.16) a partir de `backend/`.
 
 ---
@@ -245,10 +253,10 @@ Todos os commits devem seguir o padrão:
 3. **Passo 2.5.3:** Testes de Slice JPA com `@DataJpaTest` e H2. *(Concluído — commit `d150c24`)*
 4. **Passo 2.5.4:** Testes de Integração com `@SpringBootTest` + `MockMvc`. *(Concluído)*
 
-### Fase 3: Processamento Assíncrono e Resiliência (Próxima Etapa)
-1. **Passo 3.1:** Simulação de webhook/fila assíncrona para liquidação de transações pendentes.
-2. **Passo 3.2:** Tratamento de estornos (`REVERSED`) através de lançamentos contábeis compensatórios.
-3. **Passo 3.3:** Tratamento global de exceções (`@RestControllerAdvice` com Problem Details / RFC 7807).
+### Fase 3: Processamento Assíncrono e Resiliência (Em Andamento)
+1. **Passo 3.1:** Simulação de webhook/fila assíncrona para liquidação de transações pendentes. *(Pendente — PRÓXIMA ETAPA)*
+2. **Passo 3.2:** Tratamento de estornos (`REVERSED`) através de lançamentos contábeis compensatórios. *(Pendente)*
+3. **Passo 3.3:** Tratamento global de exceções (`@RestControllerAdvice` com Problem Details / RFC 7807). *(Concluído)*
 
 ### Fase 4: Frontend (Angular)
 1. **Passo 4.1:** Setup do projeto Angular com roteamento e interceptor HTTP para JWT.
