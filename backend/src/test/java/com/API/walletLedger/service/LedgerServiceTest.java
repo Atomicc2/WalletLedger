@@ -2,6 +2,7 @@ package com.API.walletLedger.service;
 
 import com.API.walletLedger.domain.*;
 import com.API.walletLedger.dto.DepositRequest;
+import com.API.walletLedger.dto.ReverseRequest;
 import com.API.walletLedger.dto.TransactionResponse;
 import com.API.walletLedger.dto.TransferRequest;
 import com.API.walletLedger.repository.AccountRepository;
@@ -256,5 +257,180 @@ class LedgerServiceTest {
             .findFirst().orElseThrow();
         assertThat(credit.getAmount()).isEqualByComparingTo(valorTransferencia);
         assertThat(credit.getAccount()).isEqualTo(anotherAccount);
+    }
+
+    // =========================================================================
+    // TESTES DE ESTORNO
+    // =========================================================================
+
+    @Test
+    @DisplayName("reverse: deve criar estorno COMPLETED com partidas compensatórias invertidas")
+    void reverse_deveCriarEstornoComPartidasInvertidas() {
+        // ARRANGE — Original COMPLETED: DEBIT SYSTEM + CREDIT Usuário
+        String idempotencyKey = UUID.randomUUID().toString();
+        UUID originalTxId = UUID.randomUUID();
+        BigDecimal valor = new BigDecimal("100.00");
+
+        Transaction original = new Transaction();
+        original.setId(originalTxId);
+        original.setIdempotencyKey("chave-original-1");
+        original.setAmount(valor);
+        original.setStatus(TransactionStatus.COMPLETED);
+
+        LedgerEntry debitSystem = new LedgerEntry();
+        debitSystem.setAccount(systemAccount);
+        debitSystem.setEntryType(EntryType.DEBIT);
+        debitSystem.setAmount(valor);
+
+        LedgerEntry creditUser = new LedgerEntry();
+        creditUser.setAccount(userAccount);
+        creditUser.setEntryType(EntryType.CREDIT);
+        creditUser.setAmount(valor);
+
+        // Quem recebeu o CREDITO (o usuário) devolve o valor → saldo suficiente
+        when(transactionRepository.findByIdempotencyKey(idempotencyKey)).thenReturn(Optional.empty());
+        when(transactionRepository.findByIdForUpdate(originalTxId)).thenReturn(Optional.of(original));
+        when(ledgerEntryRepository.findByTransactionId(originalTxId)).thenReturn(List.of(debitSystem, creditUser));
+        when(accountRepository.findByIdForUpdate(userAccount.getId())).thenReturn(Optional.of(userAccount));
+        when(ledgerEntryRepository.getBalanceByAccountId(userAccount.getId())).thenReturn(new BigDecimal("100.00"));
+
+        Transaction savedReversal = new Transaction();
+        savedReversal.setId(UUID.randomUUID());
+        savedReversal.setIdempotencyKey(idempotencyKey);
+        savedReversal.setAmount(valor);
+        savedReversal.setStatus(TransactionStatus.COMPLETED);
+        when(transactionRepository.save(any(Transaction.class))).thenReturn(savedReversal);
+        when(ledgerEntryRepository.findByTransactionId(savedReversal.getId())).thenReturn(List.of());
+
+        ReverseRequest request = new ReverseRequest(idempotencyKey, originalTxId, null);
+
+        // ACT
+        TransactionResponse response = ledgerService.reverse(request);
+
+        // ASSERT
+        assertThat(response.status()).isEqualTo(TransactionStatus.COMPLETED);
+        assertThat(response.amount()).isEqualByComparingTo(valor);
+
+        // Original foi marcada como REVERSED e salva
+        assertThat(original.getStatus()).isEqualTo(TransactionStatus.REVERSED);
+        verify(transactionRepository).save(original);
+
+        // Estorno criou 2 partidas COMPENSATÓRIAS com os tipos INVERTIDOS
+        ArgumentCaptor<LedgerEntry> entryCaptor = ArgumentCaptor.forClass(LedgerEntry.class);
+        verify(ledgerEntryRepository, times(2)).save(entryCaptor.capture());
+        List<LedgerEntry> entradasInvertidas = entryCaptor.getAllValues();
+        assertThat(entradasInvertidas).hasSize(2);
+
+        LedgerEntry invertidaSystem = entradasInvertidas.stream()
+            .filter(e -> e.getAccount().equals(systemAccount)).findFirst().orElseThrow();
+        assertThat(invertidaSystem.getEntryType()).isEqualTo(EntryType.CREDIT); // era DEBIT
+        assertThat(invertidaSystem.getAmount()).isEqualByComparingTo(valor);
+
+        LedgerEntry invertidaUser = entradasInvertidas.stream()
+            .filter(e -> e.getAccount().equals(userAccount)).findFirst().orElseThrow();
+        assertThat(invertidaUser.getEntryType()).isEqualTo(EntryType.DEBIT); // era CREDIT
+        assertThat(invertidaUser.getAmount()).isEqualByComparingTo(valor);
+    }
+
+    @Test
+    @DisplayName("reverse: idempotência — deve retornar estorno existente sem duplicar")
+    void reverse_deveRetornarEstornoExistente_quandoIdempotencyKeyDuplicada() {
+        // ARRANGE
+        String idempotencyKey = "chave-estorno-ja-usada";
+        Transaction existing = new Transaction();
+        existing.setId(UUID.randomUUID());
+        existing.setIdempotencyKey(idempotencyKey);
+        existing.setStatus(TransactionStatus.COMPLETED);
+
+        when(transactionRepository.findByIdempotencyKey(idempotencyKey)).thenReturn(Optional.of(existing));
+        when(ledgerEntryRepository.findByTransactionId(existing.getId())).thenReturn(List.of());
+
+        ReverseRequest request = new ReverseRequest(idempotencyKey, UUID.randomUUID(), null);
+
+        // ACT
+        TransactionResponse response = ledgerService.reverse(request);
+
+        // ASSERT
+        assertThat(response.idempotencyKey()).isEqualTo(idempotencyKey);
+        verify(transactionRepository, never()).findByIdForUpdate(any());
+        verify(transactionRepository, never()).save(any());
+        verify(ledgerEntryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("reverse: deve lançar IllegalArgumentException quando a transação não existe")
+    void reverse_deveLancarExcecao_quandoTransacaoNaoEncontrada() {
+        // ARRANGE
+        String idempotencyKey = UUID.randomUUID().toString();
+        UUID txInexistente = UUID.randomUUID();
+        ReverseRequest request = new ReverseRequest(idempotencyKey, txInexistente, null);
+
+        when(transactionRepository.findByIdempotencyKey(idempotencyKey)).thenReturn(Optional.empty());
+        when(transactionRepository.findByIdForUpdate(txInexistente)).thenReturn(Optional.empty());
+
+        // ACT & ASSERT
+        assertThatThrownBy(() -> ledgerService.reverse(request))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Transação não encontrada");
+
+        verify(transactionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("reverse: deve lançar IllegalStateException quando a transação não está COMPLETED")
+    void reverse_deveLancarExcecao_quandoStatusNaoEhCompleted() {
+        // ARRANGE — transação já estornada (REVERSED)
+        String idempotencyKey = UUID.randomUUID().toString();
+        UUID originalTxId = UUID.randomUUID();
+
+        Transaction original = new Transaction();
+        original.setId(originalTxId);
+        original.setStatus(TransactionStatus.REVERSED);
+
+        ReverseRequest request = new ReverseRequest(idempotencyKey, originalTxId, null);
+
+        when(transactionRepository.findByIdempotencyKey(idempotencyKey)).thenReturn(Optional.empty());
+        when(transactionRepository.findByIdForUpdate(originalTxId)).thenReturn(Optional.of(original));
+
+        // ACT & ASSERT
+        assertThatThrownBy(() -> ledgerService.reverse(request))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Apenas transações COMPLETED");
+
+        verify(transactionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("reverse: deve lançar IllegalArgumentException quando o saldo é insuficiente para devolver")
+    void reverse_deveLancarExcecao_quandoSaldoInsuficiente() {
+        // ARRANGE — usuário recebeu CREDIT de 100 na original, mas só tem 30
+        String idempotencyKey = UUID.randomUUID().toString();
+        UUID originalTxId = UUID.randomUUID();
+        BigDecimal valor = new BigDecimal("100.00");
+
+        Transaction original = new Transaction();
+        original.setId(originalTxId);
+        original.setStatus(TransactionStatus.COMPLETED);
+
+        LedgerEntry creditUser = new LedgerEntry();
+        creditUser.setAccount(userAccount);
+        creditUser.setEntryType(EntryType.CREDIT);
+        creditUser.setAmount(valor);
+
+        ReverseRequest request = new ReverseRequest(idempotencyKey, originalTxId, null);
+
+        when(transactionRepository.findByIdempotencyKey(idempotencyKey)).thenReturn(Optional.empty());
+        when(transactionRepository.findByIdForUpdate(originalTxId)).thenReturn(Optional.of(original));
+        when(ledgerEntryRepository.findByTransactionId(originalTxId)).thenReturn(List.of(creditUser));
+        when(accountRepository.findByIdForUpdate(userAccount.getId())).thenReturn(Optional.of(userAccount));
+        when(ledgerEntryRepository.getBalanceByAccountId(userAccount.getId())).thenReturn(new BigDecimal("30.00"));
+
+        // ACT & ASSERT
+        assertThatThrownBy(() -> ledgerService.reverse(request))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Saldo insuficiente para estorno");
+
+        verify(transactionRepository, never()).save(any());
+        verify(ledgerEntryRepository, never()).save(any());
     }
 }
