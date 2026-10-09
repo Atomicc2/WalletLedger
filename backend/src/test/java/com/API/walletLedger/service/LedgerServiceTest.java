@@ -504,4 +504,117 @@ class LedgerServiceTest {
         verify(transactionRepository, never()).save(any());
         verify(ledgerEntryRepository, never()).save(any());
     }
+
+    // =========================================================================
+    // TESTES DE LIQUIDAÇÃO — WEBHOOK / FILA (Fase 3.1)
+    // =========================================================================
+
+    @Test
+    @DisplayName("settle: aprovado — deve criar partidas do depósito e marcar COMPLETED")
+    void settle_deveCriarPartidasECOMPLETED_quandoAprovado() {
+        // ARRANGE — transação PENDING criada pelo depositAsync (sem partidas)
+        Transaction pending = new Transaction();
+        pending.setId(UUID.randomUUID());
+        pending.setAmount(new BigDecimal("250.00"));
+        pending.setStatus(TransactionStatus.PENDING);
+        pending.setTargetAccount(userAccount);
+
+        when(transactionRepository.findByIdForUpdate(pending.getId())).thenReturn(Optional.of(pending));
+        when(accountRepository.findByIdForUpdate(userAccount.getId())).thenReturn(Optional.of(userAccount));
+        when(accountRepository.findByAccountType(AccountType.SYSTEM)).thenReturn(Optional.of(systemAccount));
+        when(transactionRepository.save(any(Transaction.class))).thenReturn(pending);
+        when(ledgerEntryRepository.findByTransactionId(pending.getId())).thenReturn(List.of());
+
+        // ACT
+        TransactionResponse response = ledgerService.settle(pending.getId(), true);
+
+        // ASSERT
+        assertThat(response.status()).isEqualTo(TransactionStatus.COMPLETED);
+        assertThat(pending.getStatus()).isEqualTo(TransactionStatus.COMPLETED);
+
+        // Agora sim: as duas partidas do depósito foram criadas
+        ArgumentCaptor<LedgerEntry> entryCaptor = ArgumentCaptor.forClass(LedgerEntry.class);
+        verify(ledgerEntryRepository, times(2)).save(entryCaptor.capture());
+        List<LedgerEntry> entradas = entryCaptor.getAllValues();
+
+        LedgerEntry debit = entradas.stream()
+            .filter(e -> e.getEntryType() == EntryType.DEBIT).findFirst().orElseThrow();
+        assertThat(debit.getAccount()).isEqualTo(systemAccount);
+        assertThat(debit.getAmount()).isEqualByComparingTo("250.00");
+
+        LedgerEntry credit = entradas.stream()
+            .filter(e -> e.getEntryType() == EntryType.CREDIT).findFirst().orElseThrow();
+        assertThat(credit.getAccount()).isEqualTo(userAccount);
+        assertThat(credit.getAmount()).isEqualByComparingTo("250.00");
+    }
+
+    @Test
+    @DisplayName("settle: rejeitado — deve marcar FAILED sem nenhuma partidas contábil")
+    void settle_deveMarcarFAILED_quandoRejeitado() {
+        // ARRANGE
+        Transaction pending = new Transaction();
+        pending.setId(UUID.randomUUID());
+        pending.setAmount(new BigDecimal("100.00"));
+        pending.setStatus(TransactionStatus.PENDING);
+        pending.setTargetAccount(userAccount);
+
+        when(transactionRepository.findByIdForUpdate(pending.getId())).thenReturn(Optional.of(pending));
+        when(transactionRepository.save(any(Transaction.class))).thenReturn(pending);
+        when(ledgerEntryRepository.findByTransactionId(pending.getId())).thenReturn(List.of());
+
+        // ACT
+        TransactionResponse response = ledgerService.settle(pending.getId(), false);
+
+        // ASSERT — FAILED e o saldo nunca muda (sem partidas, sem conta SYSTEM)
+        assertThat(response.status()).isEqualTo(TransactionStatus.FAILED);
+        verify(ledgerEntryRepository, never()).save(any());
+        verify(accountRepository, never()).findByAccountType(any());
+    }
+
+    @Test
+    @DisplayName("settle: idempotente — retentativa do webhook em transação já liquidada não refaz nada")
+    void settle_deveSerIdempotente_quandoTransacaoJaNaoEstaPending() {
+        // ARRANGE — segunda entrega do provedor encontra a transação já COMPLETED
+        Transaction alreadyCompleted = new Transaction();
+        alreadyCompleted.setId(UUID.randomUUID());
+        alreadyCompleted.setAmount(new BigDecimal("100.00"));
+        alreadyCompleted.setStatus(TransactionStatus.COMPLETED);
+
+        when(transactionRepository.findByIdForUpdate(alreadyCompleted.getId()))
+            .thenReturn(Optional.of(alreadyCompleted));
+        when(ledgerEntryRepository.findByTransactionId(alreadyCompleted.getId())).thenReturn(List.of());
+
+        // ACT
+        TransactionResponse response = ledgerService.settle(alreadyCompleted.getId(), true);
+
+        // ASSERT — devolve o estado atual sem criar nada novo
+        assertThat(response.status()).isEqualTo(TransactionStatus.COMPLETED);
+        verify(transactionRepository, never()).save(any());
+        verify(ledgerEntryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("settle: conta bloqueada enquanto a transação esperava — deve marcar FAILED")
+    void settle_deveMarcarFAILED_quandoContaDestinoBloqueada() {
+        // ARRANGE — conta estava ativa ao criar o PENDING, foi bloqueada DEPOIS
+        userAccount.setStatus(AccountStatus.BLOCKED);
+        Transaction pending = new Transaction();
+        pending.setId(UUID.randomUUID());
+        pending.setAmount(new BigDecimal("80.00"));
+        pending.setStatus(TransactionStatus.PENDING);
+        pending.setTargetAccount(userAccount);
+
+        when(transactionRepository.findByIdForUpdate(pending.getId())).thenReturn(Optional.of(pending));
+        when(accountRepository.findByIdForUpdate(userAccount.getId())).thenReturn(Optional.of(userAccount));
+        when(transactionRepository.save(any(Transaction.class))).thenReturn(pending);
+        when(ledgerEntryRepository.findByTransactionId(pending.getId())).thenReturn(List.of());
+
+        // ACT
+        TransactionResponse response = ledgerService.settle(pending.getId(), true);
+
+        // ASSERT — não creditou em conta bloqueada
+        assertThat(response.status()).isEqualTo(TransactionStatus.FAILED);
+        verify(ledgerEntryRepository, never()).save(any());
+        verify(accountRepository, never()).findByAccountType(any());
+    }
 }
