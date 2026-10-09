@@ -43,6 +43,16 @@ public class Transaction {
     @JoinColumn(name = "reversal_of_id")
     private Transaction reversalOf;
 
+    /**
+     * Conta que receberá o crédito do depósito (Fase 3.1).
+     * Enquanto a transação está PENDING não existem ledger_entries, então esta
+     * coluna é o ÚNICO registro do destino — é dela que o webhook/worker lê o
+     * alvo na hora de liquidar. Nullable: só depósitos a preenchem.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "target_account_id")
+    private Account targetAccount;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

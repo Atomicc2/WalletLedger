@@ -53,6 +53,7 @@ public class LedgerService {
         transaction.setAmount(request.amount());
         transaction.setStatus(TransactionStatus.COMPLETED);
         transaction.setDescription(request.description() != null ? request.description() : "Depósito de fundos");
+        transaction.setTargetAccount(targetAccount);
         Transaction savedTx = transactionRepository.save(transaction);
 
         // 5. Partidas Dobradas: Débito no Sistema e Crédito no Usuário
@@ -70,6 +71,46 @@ public class LedgerService {
 
         ledgerEntryRepository.save(debitSystem);
         ledgerEntryRepository.save(creditUser);
+
+        return toResponse(savedTx);
+    }
+
+    /**
+     * Operação de Depósito Assíncrono (Fase 3.1):
+     * - Cria a transação como PENDING e devolve 202 imediatamente (o cliente não espera)
+     * - NÃO cria lançamentos contábeis: o dinheiro ainda NÃO moveu.
+     *   As partidas só são criadas quando a transação for LIQUIDADA (COMPLETED),
+     *   pelo webhook (B2a) ou pelo worker da fila (B2b).
+     * - Enquanto PENDING, o saldo do usuário não muda — é apenas uma intenção.
+     */
+    @Transactional
+    public TransactionResponse depositAsync(DepositRequest request) {
+        // 1. Idempotência: retentativas do cliente não duplicam a intenção de depósito
+        Optional<Transaction> existingTx = transactionRepository.findByIdempotencyKey(request.idempotencyKey());
+        if (existingTx.isPresent()) {
+            return toResponse(existingTx.get());
+        }
+
+        // 2. Valida a conta de destino (existe e está ativa)
+        Account targetAccount = accountRepository.findById(request.targetAccountId())
+            .orElseThrow(() -> new IllegalArgumentException("Conta de destino não encontrada: " + request.targetAccountId()));
+
+        if (targetAccount.getStatus() != AccountStatus.ACTIVE) {
+            throw new IllegalStateException("Conta de destino não está ativa.");
+        }
+
+        // 3. Cria a transação PENDING — SEM partidas contábeis (dinheiro não moveu ainda).
+        //    O destino é registrado na própria transação (target_account_id), pois
+        //    sem partidas não há outro vínculo com a conta até a liquidação.
+        Transaction transaction = new Transaction();
+        transaction.setIdempotencyKey(request.idempotencyKey());
+        transaction.setAmount(request.amount());
+        transaction.setStatus(TransactionStatus.PENDING);
+        transaction.setTargetAccount(targetAccount);
+        transaction.setDescription(request.description() != null
+            ? request.description()
+            : "Depósito externo aguardando liquidação");
+        Transaction savedTx = transactionRepository.save(transaction);
 
         return toResponse(savedTx);
     }

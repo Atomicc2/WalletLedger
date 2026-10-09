@@ -27,6 +27,17 @@ public class TransactionController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    /**
+     * Depósito assíncrono (Fase 3.1): 202 Accepted.
+     * Significa "recebi, mas ainda não terminei" — a transação nasce PENDING e
+     * só ganha partidas contábeis quando for liquidada (webhook ou fila).
+     */
+    @PostMapping("/deposit-async")
+    public ResponseEntity<TransactionResponse> depositAsync(@Valid @RequestBody DepositRequest request) {
+        TransactionResponse response = ledgerService.depositAsync(request);
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
+    }
+
     @PostMapping("/transfer")
     public ResponseEntity<TransactionResponse> transfer(@Valid @RequestBody TransferRequest request) {
         TransactionResponse response = ledgerService.transfer(request);
