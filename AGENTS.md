@@ -26,6 +26,7 @@ Como o objetivo é o aprendizado do desenvolvedor, o agente deve seguir este cic
 3. **Depois:** explicar o que mudou, por que funciona e quais armadilhas existem, em linguagem didática (sem jargão não explicado).
 4. **Pausar:** só avançar para o próximo bloco com a aprovação explícita do desenvolvedor. Encerrar a resposta com um resumo curto do estado atual e uma pergunta objetiva do tipo *"posso seguir para X?"*.
 5. **Nunca** commitar ou alterar arquivos principais sem antes apresentar o que será feito e obter o "ok" (ver seção de Permissões abaixo).
+6. **Didática especial da Fase 4 (React):** o desenvolvedor domina Java/Spring, mas tem apenas **noções básicas de React**. Em toda etapa de frontend, as explicações devem ser **simples, intuitivas e detalhadas**: explicar cada conceito de React (componente, JSX, props, estado `useState`, efeito `useEffect`, roteamento SPA, interceptores HTTP, `localStorage`) **antes** de ele aparecer no código, sempre com analogias e sem presumir conhecimento prévio de JavaScript/frontend — nenhum jargão sem tradução.
 
 ### 🔐 Permissões e Aprovações
 
