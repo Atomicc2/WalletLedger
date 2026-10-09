@@ -188,6 +188,17 @@ Todos os commits devem seguir o padrão:
     - Usa o **mesmo `settle()`** do webhook (lógica de liquidação existe uma vez só; se o webhook já liquidou, o worker cai na guarda `PENDING` e não duplica).
     - `try/catch` **por transação**: uma falha não mata a fila; exceção no `@Scheduled` é registrada pelo Spring e reexecuta no próximo tick.
   - Testes (B2b): `PendingSettlementWorkerTest` — 3 unitários (fila inteira, falha isolada, cutoff = agora − carência via `ReflectionTestUtils`) + `PendingSettlementWorkerIntegrationTest` — 2 cenários (PENDING antigo liquida com saldo; PENDING recente é ignorado; envelhecimento via SQL direto pois `created_at` é `updatable=false`, com `flush()` antes para garantir o INSERT).
+- [x] **Revisão de Segurança — Autorização de Dono-de-Conta (S1+S2, 2026-10-08):**
+  - **Achado crítico corrigido:** a autenticação existia (JWT), mas **nenhum endpoint verificava dono** (IDOR) — qualquer usuário autenticado podia transferir dinheiro de contas alheias, ler saldo/extrato de qualquer conta, creditar depósito e estornar transações de terceiros.
+  - **`OwnershipGuard`** (`config`): lê o principal do `SecurityContext` (`UserDetails` → e-mail → `User`) e valida:
+    - `assertAccountOwner(accountId)` — só o dono acessa a conta; **conta SYSTEM sem dono → negado para todos**;
+    - `assertTransactionParticipant(transactionId)` — só quem participa estorna (dono do destino registrado, ou alguma conta com lançamento).
+  - **Guarda na borda (controllers), NÃO no `LedgerService`** — o `settle()` é compartilhado com webhook/worker, que não têm usuário logado; a lógica de negócio permanece pura.
+  - **`GlobalExceptionHandler`:** `AccessDeniedException` → **403** ProblemDetail (`Acesso negado`). Semântica: 401 = não se identificou; 403 = identificou, mas não pode.
+  - **Regras aplicadas:** `balance`/`statement` só de conta própria; `deposit`/`deposit-async` só creditam destino próprio; `transfer` exige **origem própria** (destino livre = a própria feature); `reverse` exige participação na transação.
+  - **Testes:** `AccountOwnershipIntegrationTest` (6) + `TransactionOwnershipIntegrationTest` (5) — incluem o ataque original (transferência com `sourceAccountId` de terceiro → 403) e regressões dos fluxos felizes.
+  - **Nota:** o acesso lazy (`account.getUser()`) no controller funciona porque o Spring Boot liga o **OSIV** (`spring.jpa.open-in-view=true`, default) — em testes, o `@Transactional` do teste também sustenta.
+  - **Dívidas de segurança restantes (futuro):** sem roles/RBAC, sem rate limiting no login, secrets de webhook/JWT versionados (produção = env var + assinatura HMAC), CORS pendente (entra na Fase 4).
 - [x] **Governança:**
   - `.gitignore` robusto cobrindo builds, Maven, IDEs e dependências futuras.
   - `README.md` documentado.
@@ -220,7 +231,7 @@ Todos os commits devem seguir o padrão:
     - `login_deveRetornar200EToken_quandoCredenciaisValidas`
     - `login_deveRetornar401_quandoSenhaErrada`
     - Estratégia: `@SpringBootTest` + `@AutoConfigureMockMvc` + `@Transactional` (rollback por teste no Postgres real).
-- ⚠️ **Suíte completa atual: `Tests run: 50, Failures: 0, Errors: 0` — `BUILD SUCCESS` (16 LedgerService + 6 JwtService + 2 LedgerEntryRepository + 6 integração transações + 4 integração estorno + 6 integração webhook + 3 worker + 2 worker integração + 4 exceções + 1 contextLoads).**
+- ⚠️ **Suíte completa atual: `Tests run: 61, Failures: 0, Errors: 0` — `BUILD SUCCESS` (16 LedgerService + 6 JwtService + 2 LedgerEntryRepository + 6 integração transações + 4 integração estorno + 6 integração webhook + 6 ownership leituras + 5 ownership escritas + 3 worker + 2 worker integração + 4 exceções + 1 contextLoads).**
 - ⚠️ **O wrapper Maven está quebrado:** falta `backend/.mvn/wrapper/maven-wrapper.properties`, então `./mvnw` falha. Usar **`mvn` do sistema** (3.9.16) a partir de `backend/`.
 
 ---
@@ -284,6 +295,7 @@ Todos os commits devem seguir o padrão:
 1. **Passo 3.1:** Simulação de webhook/fila assíncrona para liquidação de transações pendentes. *(Concluído — B1 depósito assíncrono, B2a webhook, B2b worker/fila)*
 2. **Passo 3.2:** Tratamento de estornos (`REVERSED`) através de lançamentos contábeis compensatórios. *(Concluído)*
 3. **Passo 3.3:** Tratamento global de exceções (`@RestControllerAdvice` com Problem Details / RFC 7807). *(Concluído)*
+4. **Passo 3.4 (extra — revisão de segurança):** Autorização de dono-de-conta (`OwnershipGuard`, correção de IDOR em todas as rotas). *(Concluído)*
 
 ### Fase 4: Frontend (React)
 1. **Passo 4.1:** Setup do projeto React (Vite + TypeScript) com roteamento e interceptor HTTP para JWT.
