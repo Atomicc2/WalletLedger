@@ -4,6 +4,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -75,6 +76,18 @@ public class GlobalExceptionHandler {
         );
         problem.setTitle("Não autorizado");
         return problemResponse(HttpStatus.UNAUTHORIZED, problem);
+    }
+
+    /**
+     * Autorização falhou (Revisão de Segurança): autenticado, mas tentando acessar
+     * recurso de outro usuário (IDOR bloqueado pelo OwnershipGuard) → 403 Forbidden.
+     * 401 = "não se identificou"; 403 = "se identificou, mas não pode".
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ProblemDetail> handleAccessDenied(AccessDeniedException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+        problem.setTitle("Acesso negado");
+        return problemResponse(HttpStatus.FORBIDDEN, problem);
     }
 
     /** Monta a resposta no media type próprio do RFC 7807: application/problem+json. */

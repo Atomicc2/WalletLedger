@@ -1,5 +1,6 @@
 package com.API.walletLedger.controller;
 
+import com.API.walletLedger.config.OwnershipGuard;
 import com.API.walletLedger.domain.Account;
 import com.API.walletLedger.domain.LedgerEntry;
 import com.API.walletLedger.dto.BalanceResponse;
@@ -24,9 +25,13 @@ public class AccountController {
 
     private final AccountRepository accountRepository;
     private final LedgerEntryRepository ledgerEntryRepository;
+    private final OwnershipGuard ownershipGuard;
 
     @GetMapping("/{accountId}/balance")
     public ResponseEntity<BalanceResponse> getBalance(@PathVariable UUID accountId) {
+        // Revisão de segurança: só o dono lê o próprio saldo (senão → 403)
+        ownershipGuard.assertAccountOwner(accountId);
+
         Account account = accountRepository.findById(accountId)
             .orElseThrow(() -> new IllegalArgumentException("Conta não encontrada: " + accountId));
 
@@ -36,6 +41,9 @@ public class AccountController {
 
     @GetMapping("/{accountId}/statement")
     public ResponseEntity<List<LedgerEntryResponse>> getStatement(@PathVariable UUID accountId) {
+        // Revisão de segurança: o extrato financeiro de terceiros não é público (senão → 403)
+        ownershipGuard.assertAccountOwner(accountId);
+
         if (!accountRepository.existsById(accountId)) {
             throw new IllegalArgumentException("Conta não encontrada: " + accountId);
         }
