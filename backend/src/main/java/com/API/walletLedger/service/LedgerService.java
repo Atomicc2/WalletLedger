@@ -266,6 +266,78 @@ public class LedgerService {
     }
 
     /**
+     * Liquidação de uma transação PENDING (Fase 3.1) — chamada pelo webhook do
+     * provedor (B2a) e pelo worker da fila (B2b). É o momento em que o dinheiro
+     * "passa a valer de verdade".
+     *
+     * Fluxo:
+     * - Lock pessimista na transação: notificações CONCORRENTES ficam serializadas;
+     * - Idempotência natural: só liquida quem ainda está PENDING (retentativas do
+     *   provedor caem aqui e recebem 200 sem duplicar partidas);
+     * - REJECTED/conta bloqueada → FAILED (sem partidas: nada se moveu);
+     * - APPROVED → cria as partidas do depósito (DEBIT SYSTEM, CREDIT destino)
+     *   e marca COMPLETED — só AGORA o saldo muda.
+     */
+    @Transactional
+    public TransactionResponse settle(UUID transactionId, boolean approved) {
+        // 1. Lock pessimista (SELECT ... FOR UPDATE): a segunda notificação da MESMA
+        //    transação espera aqui e enxerga o status já atualizado
+        Transaction transaction = transactionRepository.findByIdForUpdate(transactionId)
+            .orElseThrow(() -> new IllegalArgumentException("Transação não encontrada: " + transactionId));
+
+        // 2. Idempotência: provedores de webhook reenviam até receber 2xx.
+        //    Transação que já saiu de PENDING → devolve o estado atual e NÃO refaz nada
+        if (transaction.getStatus() != TransactionStatus.PENDING) {
+            return toResponse(transaction);
+        }
+
+        // 3. Reprovação do provedor → FAILED sem lançamentos contábeis
+        if (!approved) {
+            transaction.setStatus(TransactionStatus.FAILED);
+            return toResponse(transactionRepository.save(transaction));
+        }
+
+        // 4. O destino foi registrado na transação na criação (coluna target_account_id)
+        Account registeredTarget = transaction.getTargetAccount();
+        if (registeredTarget == null) {
+            throw new IllegalStateException("Transação pendente sem conta de destino registrada.");
+        }
+
+        // 5. Lock na conta de destino: a conta pode ter sido bloqueada ENQUANTO a
+        //    transação ficava PENDING — o lock garante checar e creditar atomicamente
+        Account targetAccount = accountRepository.findByIdForUpdate(registeredTarget.getId())
+            .orElseThrow(() -> new IllegalArgumentException("Conta de destino não encontrada: " + registeredTarget.getId()));
+
+        if (targetAccount.getStatus() != AccountStatus.ACTIVE) {
+            transaction.setStatus(TransactionStatus.FAILED);
+            return toResponse(transactionRepository.save(transaction));
+        }
+
+        // 6. Conta mestre do sistema (perna de débito do depósito, como no síncrono)
+        Account systemAccount = accountRepository.findByAccountType(AccountType.SYSTEM)
+            .orElseThrow(() -> new IllegalStateException("Conta mestre do sistema não encontrada."));
+
+        // 7. LIQUIDAÇÃO: cria as partidas dobradas e finaliza
+        LedgerEntry debitSystem = new LedgerEntry();
+        debitSystem.setTransaction(transaction);
+        debitSystem.setAccount(systemAccount);
+        debitSystem.setEntryType(EntryType.DEBIT);
+        debitSystem.setAmount(transaction.getAmount());
+
+        LedgerEntry creditTarget = new LedgerEntry();
+        creditTarget.setTransaction(transaction);
+        creditTarget.setAccount(targetAccount);
+        creditTarget.setEntryType(EntryType.CREDIT);
+        creditTarget.setAmount(transaction.getAmount());
+
+        ledgerEntryRepository.save(debitSystem);
+        ledgerEntryRepository.save(creditTarget);
+
+        transaction.setStatus(TransactionStatus.COMPLETED);
+        return toResponse(transactionRepository.save(transaction));
+    }
+
+    /**
      * Monta o TransactionResponse contendo todas as linhas contábeis associadas
      */
     private TransactionResponse toResponse(Transaction tx) {

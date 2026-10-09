@@ -33,6 +33,10 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/users").permitAll()
                 // Futura rota de login pública
                 .requestMatchers(HttpMethod.POST, "/api/auth/**").permitAll()
+                // Webhook do provedor de pagamento (Fase 3.1): o provedor NÃO tem
+                // nosso JWT, então a rota é pública e se protege pelo header
+                // X-Webhook-Secret (validado no WebhookController).
+                .requestMatchers("/api/webhooks/**").permitAll()
                 // Qualquer outro endpoint exige autenticação
                 .anyRequest().authenticated()
             )
