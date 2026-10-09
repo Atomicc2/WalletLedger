@@ -80,7 +80,7 @@ Todos os commits devem seguir o padrão:
   - Lombok & Jakarta Bean Validation
   - Maven
 - **Frontend (Futuro):**
-  - Angular (TypeScript, RxJS, Tailwind/Material)
+  - React (TypeScript, Vite, React Router, Tailwind) — **decidido em 2026-10-08**: a troca Angular → React não afeta o backend (API REST pura); apenas o docs muda. Na Fase 4 entra a configuração de **CORS** no backend (frontend em Vercel, backend em Render).
 - **Infraestrutura e Deploy Planejado:**
   - Docker & Docker Compose (Ambiente local de desenvolvimento)
   - Backend: Render ou Railway
@@ -161,6 +161,18 @@ Todos os commits devem seguir o padrão:
     - `BadCredentialsException` (login) → **401** com corpo explicativo.
   - Sem `@ExceptionHandler(Exception.class)` "catch-all" de propósito: um handler genérico capturaria exceções do próprio Spring (ex.: rota inexistente) e viraria 500; o fallback padrão do Spring Boot continua cuidando disso.
   - Testes: `GlobalExceptionHandlerIntegrationTest` — 4 cenários.
+- [x] **Estornos de Transações (Fase 3.2):**
+  - Migração `V4__add_reversal_reference_to_transactions.sql`: coluna `reversal_of_id` (FK auto-referente `transactions`) para auditoria — o estorno NÃO apaga as partidas originais.
+  - Entidade `Transaction` ganhou auto-referência `reversalOf` (LAZY).
+  - `TransactionRepository.findByIdForUpdate` com `@Lock(PESSIMISTIC_WRITE)` — serializa estornos concorrentes da mesma transação.
+  - DTO `ReverseRequest` (o valor NÃO vem no request: é copiado da original, sem divergência possível).
+  - `LedgerService.reverse()`:
+    - Regra de estado: só estorna `COMPLETED` (original vira `REVERSED`);
+    - Cria uma NOVA transação `COMPLETED` com partidas compensatórias **INVERTIDAS** (o DEBIT original vira CREDIT e vice-versa), preservando o invariante de dupla entrada;
+    - Lock pessimista nas contas a debitar + validação de saldo (quem recebeu o CREDIT devolve);
+    - Idempotência própria do estorno via `idempotency_key`.
+  - Rota: `POST /api/transactions/reverse` (autenticada).
+  - Testes: `LedgerServiceTest` +5 (10 no total) e `ReverseTransactionIntegrationTest` — 4 cenários (estorno feliz com partidas invertidas e auditoria, estorno duplo → 409, saldo insuficiente → 400, sem token → 401).
 - [x] **Governança:**
   - `.gitignore` robusto cobrindo builds, Maven, IDEs e dependências futuras.
   - `README.md` documentado.
@@ -193,7 +205,7 @@ Todos os commits devem seguir o padrão:
     - `login_deveRetornar200EToken_quandoCredenciaisValidas`
     - `login_deveRetornar401_quandoSenhaErrada`
     - Estratégia: `@SpringBootTest` + `@AutoConfigureMockMvc` + `@Transactional` (rollback por teste no Postgres real).
-- ⚠️ **Suíte completa atual: `Tests run: 22, Failures: 0, Errors: 0` — `BUILD SUCCESS` (5 LedgerService + 6 JwtService + 2 LedgerEntryRepository + 4 integração + 4 exceções + 1 contextLoads).**
+- ⚠️ **Suíte completa atual: `Tests run: 31, Failures: 0, Errors: 0` — `BUILD SUCCESS` (10 LedgerService + 6 JwtService + 2 LedgerEntryRepository + 4 integração transações + 4 integração estorno + 4 exceções + 1 contextLoads).**
 - ⚠️ **O wrapper Maven está quebrado:** falta `backend/.mvn/wrapper/maven-wrapper.properties`, então `./mvnw` falha. Usar **`mvn` do sistema** (3.9.16) a partir de `backend/`.
 
 ---
@@ -255,11 +267,11 @@ Todos os commits devem seguir o padrão:
 
 ### Fase 3: Processamento Assíncrono e Resiliência (Em Andamento)
 1. **Passo 3.1:** Simulação de webhook/fila assíncrona para liquidação de transações pendentes. *(Pendente — PRÓXIMA ETAPA)*
-2. **Passo 3.2:** Tratamento de estornos (`REVERSED`) através de lançamentos contábeis compensatórios. *(Pendente)*
+2. **Passo 3.2:** Tratamento de estornos (`REVERSED`) através de lançamentos contábeis compensatórios. *(Concluído)*
 3. **Passo 3.3:** Tratamento global de exceções (`@RestControllerAdvice` com Problem Details / RFC 7807). *(Concluído)*
 
-### Fase 4: Frontend (Angular)
-1. **Passo 4.1:** Setup do projeto Angular com roteamento e interceptor HTTP para JWT.
+### Fase 4: Frontend (React)
+1. **Passo 4.1:** Setup do projeto React (Vite + TypeScript) com roteamento e interceptor HTTP para JWT.
 2. **Passo 4.2:** Telas de Login e Cadastro.
 3. **Passo 4.3:** Dashboard com saldo atualizado e formulário de transferência/depósito.
 4. **Passo 4.4:** Extrato de transações e detalhamento de entradas do ledger.
