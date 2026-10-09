@@ -14,7 +14,7 @@ O objetivo deste projeto é duplo: **desenvolver uma carteira digital com padrõ
 2. **Implementação Incremental em Pequenos Blocos:** **NUNCA** implemente múltiplos módulos, serviços complexos ou refatorações gigantescas em uma única resposta. Faça uma etapa por vez (ex.: primeiro o Controller, depois a Segurança, depois o Teste).
 3. **Explicação Clara e Concisa do "Porquê":** A cada alteração ou novo arquivo gerado, o agente deve fornecer uma explicação didática dos conceitos-chave aplicados (ex.: por que desabilitar CSRF em APIs stateless, por que usar `SecurityFilterChain`, por que locking pessimista em transferências).
 4. **Revisão e Aprovação Prévia:** O agente deve apresentar o plano e as alterações de forma compreensível para que o desenvolvedor aprove antes de avançar para a próxima etapa.
-5. **Atualização Contínua deste Documento:** Conforme novos módulos, tabelas ou fluxos forem concluídos, o agente deve manter as seções de *Estado Atual* e *Roadmap* deste arquivo sempre atualizadas.
+5. **Atualização Contínua deste Documento:** Conforme novos módulos, tabelas ou fluxos forem concluídos, o agente deve manter as seções de *Estado Atual* e *Roadmap* deste arquivo sempre atualizadas — **a cada bloco/fase concluída e commitada**. Isso é o que permite retomar o trabalho em outra plataforma, sessão ou agente sem retrabalho: quem chegar novo lê este arquivo e sabe exatamente onde parar.
 6. **Padrão Rigoroso de Commits:** Sempre que uma etapa for concluída e testada, os commits devem seguir rigorosamente o padrão **Conventional Commits** com escopo e descrição detalhada no corpo (veja seção abaixo).
 
 ### Protocolo de Didática (obrigatório neste projeto)
@@ -173,6 +173,15 @@ Todos os commits devem seguir o padrão:
     - Idempotência própria do estorno via `idempotency_key`.
   - Rota: `POST /api/transactions/reverse` (autenticada).
   - Testes: `LedgerServiceTest` +5 (10 no total) e `ReverseTransactionIntegrationTest` — 4 cenários (estorno feliz com partidas invertidas e auditoria, estorno duplo → 409, saldo insuficiente → 400, sem token → 401).
+- [x] **Processamento Assíncrono (Fase 3.1 — B1 ✅ e B2a ✅; B2b pendente):**
+  - **B1 — Depósito assíncrono:** `POST /api/transactions/deposit-async` → **202 Accepted**; a transação nasce `PENDING` **sem partidas contábeis** — enquanto pendente o saldo não muda (é intenção, não dinheiro movido). O `/deposit` síncrono (201) continua existindo como contraste.
+  - Migração `V5__add_target_account_to_transactions.sql` (`target_account_id`): sem partidas não há vínculo com conta, então a própria `Transaction` registra o destino que webhook/worker usarão na liquidação.
+  - **B2a — Webhook:** `POST /api/webhooks/payment` (rota **pública** — o provedor não tem nosso JWT) protegida por header `X-Webhook-Secret` comparado em **tempo constante** (`MessageDigest.isEqual`, contra timing attack); secret em `application.properties` (`wallet.webhook.secret`) — em produção: variável de ambiente + assinatura HMAC-SHA256 do corpo.
+  - **`LedgerService.settle(transactionId, approved)`** — núcleo da liquidação, compartilhado entre webhook e worker:
+    - lock pessimista na transação **e** na conta destino (concorrência + bloqueio de conta durante a espera);
+    - idempotência natural: só liquida `PENDING` → retentativas do provedor recebem `200` sem duplicar partidas;
+    - `APPROVED` → cria as partidas do depósito (DEBIT SYSTEM + CREDIT destino) e `COMPLETED`; `REJECTED`/conta bloqueada → `FAILED` **sem partidas** (saldo intacto).
+  - Testes: `LedgerServiceTest` +4 (16 no total) e `WebhookSettlementIntegrationTest` — 6 cenários (secret errado/ausente → 401, aprovado com saldo 0 → 250, retentativa sem duplicar, rejeitado → FAILED, transação inexistente → 400).
 - [x] **Governança:**
   - `.gitignore` robusto cobrindo builds, Maven, IDEs e dependências futuras.
   - `README.md` documentado.
@@ -205,7 +214,7 @@ Todos os commits devem seguir o padrão:
     - `login_deveRetornar200EToken_quandoCredenciaisValidas`
     - `login_deveRetornar401_quandoSenhaErrada`
     - Estratégia: `@SpringBootTest` + `@AutoConfigureMockMvc` + `@Transactional` (rollback por teste no Postgres real).
-- ⚠️ **Suíte completa atual: `Tests run: 31, Failures: 0, Errors: 0` — `BUILD SUCCESS` (10 LedgerService + 6 JwtService + 2 LedgerEntryRepository + 4 integração transações + 4 integração estorno + 4 exceções + 1 contextLoads).**
+- ⚠️ **Suíte completa atual: `Tests run: 45, Failures: 0, Errors: 0` — `BUILD SUCCESS` (16 LedgerService + 6 JwtService + 2 LedgerEntryRepository + 6 integração transações + 4 integração estorno + 6 integração webhook + 4 exceções + 1 contextLoads).**
 - ⚠️ **O wrapper Maven está quebrado:** falta `backend/.mvn/wrapper/maven-wrapper.properties`, então `./mvnw` falha. Usar **`mvn` do sistema** (3.9.16) a partir de `backend/`.
 
 ---
@@ -266,7 +275,7 @@ Todos os commits devem seguir o padrão:
 4. **Passo 2.5.4:** Testes de Integração com `@SpringBootTest` + `MockMvc`. *(Concluído)*
 
 ### Fase 3: Processamento Assíncrono e Resiliência (Em Andamento)
-1. **Passo 3.1:** Simulação de webhook/fila assíncrona para liquidação de transações pendentes. *(Pendente — PRÓXIMA ETAPA)*
+1. **Passo 3.1:** Simulação de webhook/fila assíncrona para liquidação de transações pendentes. *(Em andamento — B1 depósito assíncrono ✅, B2a webhook ✅; falta B2b worker/fila `@Scheduled`)*
 2. **Passo 3.2:** Tratamento de estornos (`REVERSED`) através de lançamentos contábeis compensatórios. *(Concluído)*
 3. **Passo 3.3:** Tratamento global de exceções (`@RestControllerAdvice` com Problem Details / RFC 7807). *(Concluído)*
 
