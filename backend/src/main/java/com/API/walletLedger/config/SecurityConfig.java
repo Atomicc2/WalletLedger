@@ -1,5 +1,6 @@
 package com.API.walletLedger.config;
 
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -36,7 +37,18 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
 
-            // 4. Registra o filtro JWT antes do filtro padrão de autenticação por usuário/senha
+            // 4. Ponto de entrada de autenticação:
+            //    por padrão o Spring Security usa Http403ForbiddenEntryPoint, que devolve
+            //    403 (Forbidden) para requisições sem autenticação. Em uma API stateless o
+            //    correto é 401 (Unauthorized) — "você não se autenticou" (o 403 fica para
+            //    "autenticou, mas não tem permissão"). O BadCredentialsException do login
+            //    também cai aqui, então credenciais erradas passam a responder 401.
+            .exceptionHandling(handling -> handling.authenticationEntryPoint(
+                (request, response, authException) ->
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED)
+            ))
+
+            // 5. Registra o filtro JWT antes do filtro padrão de autenticação por usuário/senha
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
             .build();
     }
