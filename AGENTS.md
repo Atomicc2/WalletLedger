@@ -173,7 +173,7 @@ Todos os commits devem seguir o padrão:
     - Idempotência própria do estorno via `idempotency_key`.
   - Rota: `POST /api/transactions/reverse` (autenticada).
   - Testes: `LedgerServiceTest` +5 (10 no total) e `ReverseTransactionIntegrationTest` — 4 cenários (estorno feliz com partidas invertidas e auditoria, estorno duplo → 409, saldo insuficiente → 400, sem token → 401).
-- [x] **Processamento Assíncrono (Fase 3.1 — B1 ✅ e B2a ✅; B2b pendente):**
+- [x] **Processamento Assíncrono (Fase 3.1 — Concluída):**
   - **B1 — Depósito assíncrono:** `POST /api/transactions/deposit-async` → **202 Accepted**; a transação nasce `PENDING` **sem partidas contábeis** — enquanto pendente o saldo não muda (é intenção, não dinheiro movido). O `/deposit` síncrono (201) continua existindo como contraste.
   - Migração `V5__add_target_account_to_transactions.sql` (`target_account_id`): sem partidas não há vínculo com conta, então a própria `Transaction` registra o destino que webhook/worker usarão na liquidação.
   - **B2a — Webhook:** `POST /api/webhooks/payment` (rota **pública** — o provedor não tem nosso JWT) protegida por header `X-Webhook-Secret` comparado em **tempo constante** (`MessageDigest.isEqual`, contra timing attack); secret em `application.properties` (`wallet.webhook.secret`) — em produção: variável de ambiente + assinatura HMAC-SHA256 do corpo.
@@ -182,6 +182,12 @@ Todos os commits devem seguir o padrão:
     - idempotência natural: só liquida `PENDING` → retentativas do provedor recebem `200` sem duplicar partidas;
     - `APPROVED` → cria as partidas do depósito (DEBIT SYSTEM + CREDIT destino) e `COMPLETED`; `REJECTED`/conta bloqueada → `FAILED` **sem partidas** (saldo intacto).
   - Testes: `LedgerServiceTest` +4 (16 no total) e `WebhookSettlementIntegrationTest` — 6 cenários (secret errado/ausente → 401, aprovado com saldo 0 → 250, retentativa sem duplicar, rejeitado → FAILED, transação inexistente → 400).
+  - **B2b — Worker da fila (consumidor):** `PendingSettlementWorker` com `@Scheduled(fixedDelayString = ${wallet.worker.poll-interval-ms})` — roda numa thread de fundo esperando o intervalo **após terminar** cada execução (nunca sobrepõe); `@EnableScheduling` na classe principal (**sem ele o `@Scheduled` é ignorado em silêncio** — armadilha clássica).
+    - A própria tabela `transactions` é a **fila**: produtor = `depositAsync`, consumidor = worker (`TransactionRepository.findPendingOlderThan`).
+    - **Carência** de 30s (`wallet.worker.settle-after-seconds`): sem ela o worker liquidaria milissegundos após o 202 e o assíncrono seria teatro.
+    - Usa o **mesmo `settle()`** do webhook (lógica de liquidação existe uma vez só; se o webhook já liquidou, o worker cai na guarda `PENDING` e não duplica).
+    - `try/catch` **por transação**: uma falha não mata a fila; exceção no `@Scheduled` é registrada pelo Spring e reexecuta no próximo tick.
+  - Testes (B2b): `PendingSettlementWorkerTest` — 3 unitários (fila inteira, falha isolada, cutoff = agora − carência via `ReflectionTestUtils`) + `PendingSettlementWorkerIntegrationTest` — 2 cenários (PENDING antigo liquida com saldo; PENDING recente é ignorado; envelhecimento via SQL direto pois `created_at` é `updatable=false`, com `flush()` antes para garantir o INSERT).
 - [x] **Governança:**
   - `.gitignore` robusto cobrindo builds, Maven, IDEs e dependências futuras.
   - `README.md` documentado.
@@ -214,7 +220,7 @@ Todos os commits devem seguir o padrão:
     - `login_deveRetornar200EToken_quandoCredenciaisValidas`
     - `login_deveRetornar401_quandoSenhaErrada`
     - Estratégia: `@SpringBootTest` + `@AutoConfigureMockMvc` + `@Transactional` (rollback por teste no Postgres real).
-- ⚠️ **Suíte completa atual: `Tests run: 45, Failures: 0, Errors: 0` — `BUILD SUCCESS` (16 LedgerService + 6 JwtService + 2 LedgerEntryRepository + 6 integração transações + 4 integração estorno + 6 integração webhook + 4 exceções + 1 contextLoads).**
+- ⚠️ **Suíte completa atual: `Tests run: 50, Failures: 0, Errors: 0` — `BUILD SUCCESS` (16 LedgerService + 6 JwtService + 2 LedgerEntryRepository + 6 integração transações + 4 integração estorno + 6 integração webhook + 3 worker + 2 worker integração + 4 exceções + 1 contextLoads).**
 - ⚠️ **O wrapper Maven está quebrado:** falta `backend/.mvn/wrapper/maven-wrapper.properties`, então `./mvnw` falha. Usar **`mvn` do sistema** (3.9.16) a partir de `backend/`.
 
 ---
@@ -274,8 +280,8 @@ Todos os commits devem seguir o padrão:
 3. **Passo 2.5.3:** Testes de Slice JPA com `@DataJpaTest` e H2. *(Concluído — commit `d150c24`)*
 4. **Passo 2.5.4:** Testes de Integração com `@SpringBootTest` + `MockMvc`. *(Concluído)*
 
-### Fase 3: Processamento Assíncrono e Resiliência (Em Andamento)
-1. **Passo 3.1:** Simulação de webhook/fila assíncrona para liquidação de transações pendentes. *(Em andamento — B1 depósito assíncrono ✅, B2a webhook ✅; falta B2b worker/fila `@Scheduled`)*
+### Fase 3: Processamento Assíncrono e Resiliência (Concluída)
+1. **Passo 3.1:** Simulação de webhook/fila assíncrona para liquidação de transações pendentes. *(Concluído — B1 depósito assíncrono, B2a webhook, B2b worker/fila)*
 2. **Passo 3.2:** Tratamento de estornos (`REVERSED`) através de lançamentos contábeis compensatórios. *(Concluído)*
 3. **Passo 3.3:** Tratamento global de exceções (`@RestControllerAdvice` com Problem Details / RFC 7807). *(Concluído)*
 
