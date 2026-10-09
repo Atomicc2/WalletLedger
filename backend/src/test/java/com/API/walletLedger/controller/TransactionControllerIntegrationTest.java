@@ -119,6 +119,30 @@ class TransactionControllerIntegrationTest {
     }
 
     @Test
+    @DisplayName("deposit-async: deve retornar 202 com status PENDING e SEM partidas contábeis")
+    void depositAsync_deveRetornar202_comStatusPending_semPartidas() throws Exception {
+        String token = loginAndGetToken(EMAIL, PASSWORD);
+
+        mockMvc.perform(post("/api/transactions/deposit-async")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(depositBody(accountId)))
+            .andExpect(status().isAccepted()) // 202: "recebi, ainda não terminei"
+            .andExpect(jsonPath("$.status").value("PENDING"))
+            // Sem partidas: o saldo do usuário ainda não mudou
+            .andExpect(jsonPath("$.entries.length()").value(0));
+    }
+
+    @Test
+    @DisplayName("deposit-async: deve retornar 401 quando não há token")
+    void depositAsync_deveRetornar401_quandoSemToken() throws Exception {
+        mockMvc.perform(post("/api/transactions/deposit-async")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(depositBody(accountId)))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     @DisplayName("login: deve retornar 200 com token Bearer quando as credenciais são válidas")
     void login_deveRetornar200EToken_quandoCredenciaisValidas() throws Exception {
         mockMvc.perform(post("/api/auth/login")

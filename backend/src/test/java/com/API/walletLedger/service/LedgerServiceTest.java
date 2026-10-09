@@ -151,6 +151,77 @@ class LedgerServiceTest {
     }
 
     // =========================================================================
+    // TESTES DE DEPÓSITO ASSÍNCRONO (Fase 3.1)
+    // =========================================================================
+
+    @Test
+    @DisplayName("depositAsync: deve criar transação PENDING sem partidas contábeis (dinheiro não moveu)")
+    void depositAsync_deveCriarTransacaoPENDING_semPartidasContabeis() {
+        // ARRANGE
+        String idempotencyKey = UUID.randomUUID().toString();
+        DepositRequest request = new DepositRequest(
+            idempotencyKey,
+            userAccount.getId(),
+            new BigDecimal("300.00"),
+            "Depósito externo"
+        );
+
+        when(transactionRepository.findByIdempotencyKey(idempotencyKey)).thenReturn(Optional.empty());
+        when(accountRepository.findById(userAccount.getId())).thenReturn(Optional.of(userAccount));
+
+        Transaction savedTx = new Transaction();
+        savedTx.setId(UUID.randomUUID());
+        savedTx.setIdempotencyKey(idempotencyKey);
+        savedTx.setAmount(request.amount());
+        savedTx.setStatus(TransactionStatus.PENDING);
+        when(transactionRepository.save(any(Transaction.class))).thenReturn(savedTx);
+
+        // ACT
+        TransactionResponse response = ledgerService.depositAsync(request);
+
+        // ASSERT
+        assertThat(response.status()).isEqualTo(TransactionStatus.PENDING);
+
+        // Captura a transação salva para inspecionar o estado persistido
+        ArgumentCaptor<Transaction> txCaptor = ArgumentCaptor.forClass(Transaction.class);
+        verify(transactionRepository, times(1)).save(txCaptor.capture());
+        Transaction saved = txCaptor.getValue();
+        assertThat(saved.getStatus()).isEqualTo(TransactionStatus.PENDING);
+        // Sem partidas, a transação é quem REGISTRA o destino (coluna target_account_id)
+        assertThat(saved.getTargetAccount()).isEqualTo(userAccount);
+
+        // NENHUMA partidas contábeis: o saldo não muda enquanto PENDING
+        verify(ledgerEntryRepository, never()).save(any());
+        // A conta SYSTEM só é necessária na LIQUIDAÇÃO, não na criação da intenção
+        verify(accountRepository, never()).findByAccountType(AccountType.SYSTEM);
+    }
+
+    @Test
+    @DisplayName("depositAsync: idempotência — deve retornar transação existente sem duplicar")
+    void depositAsync_deveRetornarTransacaoExistente_quandoIdempotencyKeyDuplicada() {
+        // ARRANGE
+        String idempotencyKey = "chave-assincrona-ja-usada";
+        Transaction existing = new Transaction();
+        existing.setId(UUID.randomUUID());
+        existing.setIdempotencyKey(idempotencyKey);
+        existing.setStatus(TransactionStatus.PENDING);
+        when(transactionRepository.findByIdempotencyKey(idempotencyKey)).thenReturn(Optional.of(existing));
+        when(ledgerEntryRepository.findByTransactionId(existing.getId())).thenReturn(List.of());
+
+        DepositRequest request = new DepositRequest(
+            idempotencyKey, userAccount.getId(), new BigDecimal("50.00"), null
+        );
+
+        // ACT
+        TransactionResponse response = ledgerService.depositAsync(request);
+
+        // ASSERT
+        assertThat(response.status()).isEqualTo(TransactionStatus.PENDING);
+        verify(transactionRepository, never()).save(any());
+        verify(ledgerEntryRepository, never()).save(any());
+    }
+
+    // =========================================================================
     // TESTES DE TRANSFERÊNCIA
     // =========================================================================
 
