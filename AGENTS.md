@@ -17,6 +17,27 @@ O objetivo deste projeto é duplo: **desenvolver uma carteira digital com padrõ
 5. **Atualização Contínua deste Documento:** Conforme novos módulos, tabelas ou fluxos forem concluídos, o agente deve manter as seções de *Estado Atual* e *Roadmap* deste arquivo sempre atualizadas.
 6. **Padrão Rigoroso de Commits:** Sempre que uma etapa for concluída e testada, os commits devem seguir rigorosamente o padrão **Conventional Commits** com escopo e descrição detalhada no corpo (veja seção abaixo).
 
+### Protocolo de Didática (obrigatório neste projeto)
+
+Como o objetivo é o aprendizado do desenvolvedor, o agente deve seguir este ciclo em **toda** etapa:
+
+1. **Antes de codar:** explicar em poucas frases o conceito/tecnologia envolvida e **o porquê** da abordagem escolhida (e as alternativas descartadas).
+2. **Durante:** implementar **apenas um bloco pequeno** por vez — nunca vários módulos, refatorações amplas ou "de uma vez".
+3. **Depois:** explicar o que mudou, por que funciona e quais armadilhas existem, em linguagem didática (sem jargão não explicado).
+4. **Pausar:** só avançar para o próximo bloco com a aprovação explícita do desenvolvedor. Encerrar a resposta com um resumo curto do estado atual e uma pergunta objetiva do tipo *"posso seguir para X?"*.
+5. **Nunca** commitar ou alterar arquivos principais sem antes apresentar o que será feito e obter o "ok" (ver seção de Permissões abaixo).
+
+### 🔐 Permissões e Aprovações
+
+O repositório tem regras de permissão em `.opencode/opencode.jsonc` (OpenCode v2) que **exigem aprovação (`ask`)** antes de:
+
+- qualquer escrita em arquivo (`edit`/`write`/`patch`);
+- `git add`, `git commit` e `git push`;
+- qualquer outro comando de shell (ex.: `mvn`, `rm`, `mv`).
+
+Leitura e inspeção (`read`, `grep`, `git status/diff/log/show/branch`) são liberadas.
+**Importante:** ao aprovar um pedido, escolher **"Allow once"** — o **"Allow always"** grava uma liberação permanente e o comando deixa de pedir aprovação.
+
 ---
 
 ## 📦 Padrão de Commits (Conventional Commits)
@@ -136,6 +157,8 @@ Todos os commits devem seguir o padrão:
   - `.gitignore` robusto cobrindo builds, Maven, IDEs e dependências futuras.
   - `README.md` documentado.
   - `AGENTS.md` atualizado com padrões IA-First e Conventional Commits.
+  - `.opencode/opencode.jsonc` com regras de permissão (`ask` para escrita/commit/push) — ver seção *Permissões e Aprovações*.
+  - ⚠️ **Lições do incidente de 2026-10-08:** nunca rodar duas sessões/agentes no mesmo diretório ao mesmo tempo — elas sobrescrevem arquivos uma da outra (um commit chegou a ser gravado com conteúdo de outra sessão). Para conferir quem está ativo: `ps aux | grep -iE "opencode|antigravity"`. O wrapper Maven `./mvnw` está quebrado (falta `backend/.mvn/wrapper/`); usar `mvn` do sistema.
 - [/] **Testes Automatizados (Fase 2.5 — Em Andamento):**
   - Bloco 1 ✅ — `LedgerServiceTest`: 5 testes unitários com Mockito passando (`Tests run: 5, Failures: 0`).
     - `deposit_deveCriarTransacaoEDuasEntradasContabeis`
@@ -152,9 +175,12 @@ Todos os commits devem seguir o padrão:
     - `isTokenExpired_deveRetornarFalse_quandoTokenValido`
     - Estratégia: `ReflectionTestUtils.setField()` injeta `secretKey` e `jwtExpirationMs` manualmente — **não** usar `@Value` em classe de teste sem contexto Spring (o campo fica `null` e todos os testes falham com `Decode argument cannot be null`).
     - Comportamento documentado: o JJWT lança `ExpiredJwtException` ao parsear claims de token vencido; `isTokenValid` captura `JwtException` e devolve `false`.
-  - Bloco 3 ⏳ — `LedgerEntryRepositoryTest`: testes de Slice JPA com `@DataJpaTest` + H2. **PRÓXIMA ETAPA**
-  - Bloco 4 ⏳ — `TransactionControllerIT`: testes de integração com `@SpringBootTest` + `MockMvc`.
-- ⚠️ **Suíte completa atual: `Tests run: 12, Failures: 0, Errors: 0` — `BUILD SUCCESS` (5 LedgerService + 6 JwtService + 1 contextLoads).**
+  - Bloco 3 ✅ — `LedgerEntryRepositoryTest`: 2 testes de Slice JPA passando (`Tests run: 2, Failures: 0`).
+    - `getBalanceByAccountId_deveRetornarSaldoZero_quandoSemEntradas`
+    - `getBalanceByAccountId_deveCalcularSaldoCorreto_comDebitosECreditos` (inclui conta de controle para provar o filtro por conta)
+    - Estratégia: `@DataJpaTest` + H2. Desabilitar o Flyway (migrações são SQL de PostgreSQL) e sobrescrever `ddl-auto=create-drop` e `H2Dialect`, pois o `application.properties` principal força `none`/`PostgreSQLDialect`.
+  - Bloco 4 ⏳ — `TransactionControllerIT`: testes de integração com `@SpringBootTest` + `MockMvc`. **PRÓXIMA ETAPA**
+- ⚠️ **Suíte completa atual: `Tests run: 14, Failures: 0, Errors: 0` — `BUILD SUCCESS` (5 LedgerService + 6 JwtService + 2 LedgerEntryRepository + 1 contextLoads).**
 - ⚠️ **O wrapper Maven está quebrado:** falta `backend/.mvn/wrapper/maven-wrapper.properties`, então `./mvnw` falha. Usar **`mvn` do sistema** (3.9.16) a partir de `backend/`.
 
 ---
@@ -194,9 +220,11 @@ Todos os commits devem seguir o padrão:
 - `isTokenExpired_deveRetornarFalse_quandoTokenValido` — token dentro da validade.
 - **Ajuste de projeto:** `JwtService.generateToken(User)` exige `user.getId()` e `user.getEmail()` não nulos (`user.getId().toString()` NPEia sem id) — os testes sempre montam User completo.
 
-#### Bloco 3 — Testes de Slice JPA do `LedgerEntryRepository` (classe: `LedgerEntryRepositoryTest`)
+#### Bloco 3 — Testes de Slice JPA do `LedgerEntryRepository` (classe: `LedgerEntryRepositoryTest`) — *(Concluído — commit `d150c24`)*
 - `getBalanceByAccountId_deveRetornarSaldoZero_quandoSemEntradas` — conta nova.
 - `getBalanceByAccountId_deveCalcularSaldoCorreto_comDebitosECreditos` — query JPQL agregada.
+- **O que é "slice":** sobe só a camada de persistência (DataSource + Hibernate + repositórios), sem web/security.
+- **Armadilha resolvida:** o `application.properties` principal vale também nos testes; sem sobrescrever `ddl-auto` e o dialeto, o H2 fica sem schema e recebe SQL de PostgreSQL. O teste anula as duas propriedades e desliga o Flyway.
 
 #### Bloco 4 — Testes de Integração MockMvc (classe: `TransactionControllerIT`)
 - `deposit_deveRetornar401_quandoSemToken` — proteção JWT.
@@ -205,9 +233,9 @@ Todos os commits devem seguir o padrão:
 - `login_deveRetornar401_quandoSenhaErrada` — credencial inválida.
 
 1. **Passo 2.5.1:** Testes unitários do `LedgerService` com Mockito. *(Concluído — commit `e838eda`)*
-2. **Passo 2.5.2:** Testes unitários do `JwtService`. *(Concluído — commit `03fee07`)*
-3. **Passo 2.5.3:** Testes de Slice JPA com `@DataJpaTest` e H2. *(Pendente — PRÓXIMA ETAPA)*
-4. **Passo 2.5.4:** Testes de Integração com `@SpringBootTest` + `MockMvc`. *(Pendente)*
+2. **Passo 2.5.2:** Testes unitários do `JwtService`. *(Concluído — commits `03fee07` / correção `8987721`)*
+3. **Passo 2.5.3:** Testes de Slice JPA com `@DataJpaTest` e H2. *(Concluído — commit `d150c24`)*
+4. **Passo 2.5.4:** Testes de Integração com `@SpringBootTest` + `MockMvc`. *(Pendente — PRÓXIMA ETAPA)*
 
 ### Fase 3: Processamento Assíncrono e Resiliência (Após a Fase 2.5)
 1. **Passo 3.1:** Simulação de webhook/fila assíncrona para liquidação de transações pendentes.
