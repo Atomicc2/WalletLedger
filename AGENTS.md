@@ -159,7 +159,7 @@ Todos os commits devem seguir o padrão:
   - `AGENTS.md` atualizado com padrões IA-First e Conventional Commits.
   - `.opencode/opencode.jsonc` com regras de permissão (`ask` para escrita/commit/push) — ver seção *Permissões e Aprovações*.
   - ⚠️ **Lições do incidente de 2026-10-08:** nunca rodar duas sessões/agentes no mesmo diretório ao mesmo tempo — elas sobrescrevem arquivos uma da outra (um commit chegou a ser gravado com conteúdo de outra sessão). Para conferir quem está ativo: `ps aux | grep -iE "opencode|antigravity"`. O wrapper Maven `./mvnw` está quebrado (falta `backend/.mvn/wrapper/`); usar `mvn` do sistema.
-- [/] **Testes Automatizados (Fase 2.5 — Em Andamento):**
+- [x] **Testes Automatizados (Fase 2.5 — Concluída):**
   - Bloco 1 ✅ — `LedgerServiceTest`: 5 testes unitários com Mockito passando (`Tests run: 5, Failures: 0`).
     - `deposit_deveCriarTransacaoEDuasEntradasContabeis`
     - `deposit_deveRetornarTransacaoExistente_quandoIdempotencyKeyDuplicada`
@@ -179,8 +179,13 @@ Todos os commits devem seguir o padrão:
     - `getBalanceByAccountId_deveRetornarSaldoZero_quandoSemEntradas`
     - `getBalanceByAccountId_deveCalcularSaldoCorreto_comDebitosECreditos` (inclui conta de controle para provar o filtro por conta)
     - Estratégia: `@DataJpaTest` + H2. Desabilitar o Flyway (migrações são SQL de PostgreSQL) e sobrescrever `ddl-auto=create-drop` e `H2Dialect`, pois o `application.properties` principal força `none`/`PostgreSQLDialect`.
-  - Bloco 4 ⏳ — `TransactionControllerIT`: testes de integração com `@SpringBootTest` + `MockMvc`. **PRÓXIMA ETAPA**
-- ⚠️ **Suíte completa atual: `Tests run: 14, Failures: 0, Errors: 0` — `BUILD SUCCESS` (5 LedgerService + 6 JwtService + 2 LedgerEntryRepository + 1 contextLoads).**
+  - Bloco 4 ✅ — `TransactionControllerIntegrationTest`: 4 testes de integração passando (`Tests run: 4, Failures: 0`).
+    - `deposit_deveRetornar401_quandoSemToken`
+    - `deposit_deveRetornar201_quandoTokenValido`
+    - `login_deveRetornar200EToken_quandoCredenciaisValidas`
+    - `login_deveRetornar401_quandoSenhaErrada`
+    - Estratégia: `@SpringBootTest` + `@AutoConfigureMockMvc` + `@Transactional` (rollback por teste no Postgres real).
+- ⚠️ **Suíte completa atual: `Tests run: 18, Failures: 0, Errors: 0` — `BUILD SUCCESS` (5 LedgerService + 6 JwtService + 2 LedgerEntryRepository + 4 integração + 1 contextLoads).**
 - ⚠️ **O wrapper Maven está quebrado:** falta `backend/.mvn/wrapper/maven-wrapper.properties`, então `./mvnw` falha. Usar **`mvn` do sistema** (3.9.16) a partir de `backend/`.
 
 ---
@@ -199,7 +204,7 @@ Todos os commits devem seguir o padrão:
 3. **Passo 2.3:** Criação e validação atômica de entradas contábeis (`LedgerEntry`). *(Concluído)*
 4. **Passo 2.4:** `TransactionController` e `AccountController` (extrato e saldo em tempo real). *(Concluído)*
 
-### Fase 2.5: Testes Automatizados (Em Andamento)
+### Fase 2.5: Testes Automatizados (Concluída — 2026-10-08)
 
 **Estratégia:** Pirâmide de testes com 3 camadas — Unitários (base), Slice JPA (meio), Integração MockMvc (topo).
 **Ferramentas:** JUnit 5 + Mockito (já inclusas no `spring-boot-starter-test`) + H2 em memória para testes JPA.
@@ -226,18 +231,21 @@ Todos os commits devem seguir o padrão:
 - **O que é "slice":** sobe só a camada de persistência (DataSource + Hibernate + repositórios), sem web/security.
 - **Armadilha resolvida:** o `application.properties` principal vale também nos testes; sem sobrescrever `ddl-auto` e o dialeto, o H2 fica sem schema e recebe SQL de PostgreSQL. O teste anula as duas propriedades e desliga o Flyway.
 
-#### Bloco 4 — Testes de Integração MockMvc (classe: `TransactionControllerIT`)
+#### Bloco 4 — Testes de Integração (classe: `TransactionControllerIntegrationTest`) — *(Concluído)*
 - `deposit_deveRetornar401_quandoSemToken` — proteção JWT.
-- `deposit_deveRetornar200_quandoTokenValido` — fluxo completo autenticado.
+- `deposit_deveRetornar201_quandoTokenValido` — fluxo completo autenticado (o controller devolve **201 Created**, não 200) e verifica as 2 partidas contábeis.
 - `login_deveRetornar200EToken_quandoCredenciaisValidas` — autenticação.
 - `login_deveRetornar401_quandoSenhaErrada` — credencial inválida.
+- **Nomenclatura:** a classe **não** se chama `...IT` porque o Surefire (`mvn test`) só executa `*Test`/`*Tests`; sufixo `IT` é do Failsafe (`mvn verify`), que não está configurado no `pom.xml`.
+- **Achado do teste (401 vs 403):** sem `AuthenticationEntryPoint`, o Spring Security responde **403** para requisição não autenticada. Corrigido no `SecurityConfig` para responder **401** (o `BadCredentialsException` do login também passa a retornar 401).
+- **Estratégia:** `@SpringBootTest` (contexto completo) + `@AutoConfigureMockMvc` (HTTP simulado, sem porta de rede) + `@Transactional` (rollback por teste, sem poluir o Postgres real).
 
 1. **Passo 2.5.1:** Testes unitários do `LedgerService` com Mockito. *(Concluído — commit `e838eda`)*
 2. **Passo 2.5.2:** Testes unitários do `JwtService`. *(Concluído — commits `03fee07` / correção `8987721`)*
 3. **Passo 2.5.3:** Testes de Slice JPA com `@DataJpaTest` e H2. *(Concluído — commit `d150c24`)*
-4. **Passo 2.5.4:** Testes de Integração com `@SpringBootTest` + `MockMvc`. *(Pendente — PRÓXIMA ETAPA)*
+4. **Passo 2.5.4:** Testes de Integração com `@SpringBootTest` + `MockMvc`. *(Concluído)*
 
-### Fase 3: Processamento Assíncrono e Resiliência (Após a Fase 2.5)
+### Fase 3: Processamento Assíncrono e Resiliência (Próxima Etapa)
 1. **Passo 3.1:** Simulação de webhook/fila assíncrona para liquidação de transações pendentes.
 2. **Passo 3.2:** Tratamento de estornos (`REVERSED`) através de lançamentos contábeis compensatórios.
 3. **Passo 3.3:** Tratamento global de exceções (`@RestControllerAdvice` com Problem Details / RFC 7807).
