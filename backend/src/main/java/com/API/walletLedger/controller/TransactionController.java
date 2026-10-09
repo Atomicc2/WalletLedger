@@ -1,6 +1,7 @@
 package com.API.walletLedger.controller;
 
 import com.API.walletLedger.dto.DepositRequest;
+import com.API.walletLedger.dto.ReverseRequest;
 import com.API.walletLedger.dto.TransactionResponse;
 import com.API.walletLedger.dto.TransferRequest;
 import com.API.walletLedger.service.LedgerService;
@@ -29,6 +30,12 @@ public class TransactionController {
     @PostMapping("/transfer")
     public ResponseEntity<TransactionResponse> transfer(@Valid @RequestBody TransferRequest request) {
         TransactionResponse response = ledgerService.transfer(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("/reverse")
+    public ResponseEntity<TransactionResponse> reverse(@Valid @RequestBody ReverseRequest request) {
+        TransactionResponse response = ledgerService.reverse(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }

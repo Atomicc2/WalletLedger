@@ -144,6 +144,87 @@ public class LedgerService {
     }
 
     /**
+     * Operação de Estorno (Fase 3.2):
+     * - Só estorna transação COMPLETED (não estorna PENDING/FAILED nem já estornada)
+     * - Cria uma NOVA transação de estorno (COMPLETED) com partidas compensatórias INVERTIDAS
+     * - Marca a original como REVERSED e vincula-a ao estorno via reversal_of (auditoria)
+     * - Lock pessimista na transação original E nas contas a debitar, impedindo
+     *   estorno duplo e gasto duplo concorrente
+     */
+    @Transactional
+    public TransactionResponse reverse(ReverseRequest request) {
+        // 1. Idempotência do estorno: mesma chave → retorna o estorno já criado
+        Optional<Transaction> existingTx = transactionRepository.findByIdempotencyKey(request.idempotencyKey());
+        if (existingTx.isPresent()) {
+            return toResponse(existingTx.get());
+        }
+
+        // 2. Lock pessimista na transação original (SELECT ... FOR UPDATE):
+        //    dois estornos concorrentes na MESMA transação ficam serializados aqui
+        Transaction original = transactionRepository.findByIdForUpdate(request.transactionId())
+            .orElseThrow(() -> new IllegalArgumentException("Transação não encontrada: " + request.transactionId()));
+
+        // 3. Regra de estado: somente COMPLETED pode ser estornada
+        if (original.getStatus() != TransactionStatus.COMPLETED) {
+            throw new IllegalStateException("Apenas transações COMPLETED podem ser estornadas.");
+        }
+
+        // 4. Carrega as partidas originais para poder invertê-las
+        List<LedgerEntry> originalEntries = ledgerEntryRepository.findByTransactionId(original.getId());
+        if (originalEntries.isEmpty()) {
+            throw new IllegalStateException("Transação original não possui lançamentos contábeis.");
+        }
+
+        // 5. Validação de saldo nas contas que serão DEBITADAS no estorno:
+        //    quem recebeu o CREDITO na original devolve o valor.
+        //    Lock pessimista na conta evita que um débito concorrente zere o saldo
+        //    entre a verificação e a gravação dos lançamentos.
+        for (LedgerEntry entry : originalEntries) {
+            if (entry.getEntryType() == EntryType.CREDIT) {
+                Account accountToDebit = accountRepository.findByIdForUpdate(entry.getAccount().getId())
+                    .orElseThrow(() -> new IllegalStateException("Conta a debitar não encontrada: " + entry.getAccount().getId()));
+
+                if (accountToDebit.getStatus() != AccountStatus.ACTIVE) {
+                    throw new IllegalStateException("Conta a debitar não está ativa.");
+                }
+
+                BigDecimal balance = ledgerEntryRepository.getBalanceByAccountId(accountToDebit.getId());
+                if (balance.compareTo(entry.getAmount()) < 0) {
+                    throw new IllegalArgumentException("Saldo insuficiente para estorno. Saldo disponível: R$ " + balance);
+                }
+            }
+        }
+
+        // 6. Marca a original como REVERSED (auditoria)
+        original.setStatus(TransactionStatus.REVERSED);
+        transactionRepository.save(original);
+
+        // 7. Cria a transação de estorno (COMPLETED) com vínculo de auditoria
+        Transaction reversal = new Transaction();
+        reversal.setIdempotencyKey(request.idempotencyKey());
+        reversal.setAmount(original.getAmount());
+        reversal.setStatus(TransactionStatus.COMPLETED);
+        reversal.setDescription(request.description() != null
+            ? request.description()
+            : "Estorno da transação " + original.getId());
+        reversal.setReversalOf(original);
+        Transaction savedReversal = transactionRepository.save(reversal);
+
+        // 8. Partidas compensatórias INVERTIDAS: o DEBIT original vira CREDIT e vice-versa.
+        //    Isso preserva o invariante contábil (soma algébrica = zero) POR transação.
+        for (LedgerEntry entry : originalEntries) {
+            LedgerEntry reversed = new LedgerEntry();
+            reversed.setTransaction(savedReversal);
+            reversed.setAccount(entry.getAccount());
+            reversed.setEntryType(entry.getEntryType() == EntryType.DEBIT ? EntryType.CREDIT : EntryType.DEBIT);
+            reversed.setAmount(entry.getAmount());
+            ledgerEntryRepository.save(reversed);
+        }
+
+        return toResponse(savedReversal);
+    }
+
+    /**
      * Monta o TransactionResponse contendo todas as linhas contábeis associadas
      */
     private TransactionResponse toResponse(Transaction tx) {

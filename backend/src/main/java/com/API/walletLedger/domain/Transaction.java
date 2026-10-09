@@ -34,6 +34,15 @@ public class Transaction {
     @Column(length = 255)
     private String description;
 
+    /**
+     * Transação original que este estorno desfaz (auditoria, Fase 3.2).
+     * Auto-referência: uma Transaction pode apontar para outra Transaction.
+     * Nullable: apenas transações de estorno têm este vínculo preenchido.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reversal_of_id")
+    private Transaction reversalOf;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
