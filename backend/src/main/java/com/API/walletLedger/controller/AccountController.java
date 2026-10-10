@@ -3,6 +3,7 @@ package com.API.walletLedger.controller;
 import com.API.walletLedger.config.OwnershipGuard;
 import com.API.walletLedger.domain.Account;
 import com.API.walletLedger.domain.LedgerEntry;
+import com.API.walletLedger.dto.AccountResponse;
 import com.API.walletLedger.dto.BalanceResponse;
 import com.API.walletLedger.dto.LedgerEntryResponse;
 import com.API.walletLedger.repository.AccountRepository;
@@ -31,6 +32,15 @@ public class AccountController {
     private final LedgerEntryRepository ledgerEntryRepository;
     private final OwnershipGuard ownershipGuard;
     private final UserRepository userRepository;
+
+    /** Endpoint "me": dados da conta do usuário autenticado (inclui ID para usar em depósito/transferência). */
+    @GetMapping("/me")
+    public ResponseEntity<AccountResponse> getMyAccount() {
+        UUID accountId = currentUserAccountId();
+        Account account = accountRepository.findById(accountId)
+            .orElseThrow(() -> new IllegalArgumentException("Conta não encontrada: " + accountId));
+        return ResponseEntity.ok(new AccountResponse(account.getId(), account.getCurrency()));
+    }
 
     /** Endpoint "me": saldo da conta do usuário autenticado (não expõe UUID). */
     @GetMapping("/me/balance")

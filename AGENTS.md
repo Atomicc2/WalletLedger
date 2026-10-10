@@ -219,6 +219,12 @@ Todos os commits devem seguir o padrão:
     - `Dashboard.tsx` + `Statement.tsx` atualizados: `useEffect` busca dados na API (`/me/balance`, `/me/statement`), estados `loading`/`error`, botão "Sair" limpa token + navega para `/login`.
     - `App.tsx` reestruturado: rotas protegidas filhas de `<Route element={<RequireAuth />}>`.
     - Build frontend ✅ + backend 61 testes ✅.
+  - **Passo 4.4 (Concluído — 2026-10-10):** Depositar/Transferir com modais, toast e refetch de saldo.
+    - Backend: `AccountController` ganha `GET /api/accounts/me` → retorna `{ accountId, currency }` para o frontend saber o UUID da própria conta.
+    - Frontend: `src/context/ToastContext.tsx` — Context API + Provider com toasts auto-expirando (sucesso/erro), `useToast()` hook.
+    - `Dashboard.tsx`: modais de **Depositar** (valor) e **Transferir** (destino UUID + valor), formulários controlados, `useToast` para feedback, `fetchBalance()` após sucesso (saldo atualiza sem recarregar), `idempotencyKey` via `crypto.randomUUID()`.
+    - `App.tsx` envolto em `<ToastProvider>`.
+    - Build frontend ✅ + backend 61 testes ✅.
 - [x] **Governança:**
   - `.gitignore` robusto cobrindo builds, Maven, IDEs e dependências futuras.
   - `README.md` documentado.
