@@ -336,8 +336,43 @@ Todos os commits devem seguir o padrão:
 3. **Passo 3.3:** Tratamento global de exceções (`@RestControllerAdvice` com Problem Details / RFC 7807). *(Concluído)*
 4. **Passo 3.4 (extra — revisão de segurança):** Autorização de dono-de-conta (`OwnershipGuard`, correção de IDOR em todas as rotas). *(Concluído)*
 
-### Fase 4: Frontend (React)
-1. **Passo 4.1:** Setup do projeto React (Vite + TypeScript) com roteamento e interceptor HTTP para JWT.
-2. **Passo 4.2:** Telas de Login e Cadastro.
-3. **Passo 4.3:** Dashboard com saldo atualizado e formulário de transferência/depósito.
-4. **Passo 4.4:** Extrato de transações e detalhamento de entradas do ledger.
+### Fase 4: Frontend (React) — **Concluída (2026-10-10)**
+1. **Passo 4.1:** Setup do projeto React (Vite + TypeScript) com roteamento e interceptor HTTP para JWT. ✅
+2. **Passo 4.2:** Telas de Login e Cadastro. ✅
+3. **Passo 4.3:** Dashboard com saldo atualizado e formulário de transferência/depósito. ✅
+4. **Passo 4.4:** Extrato de transações e detalhamento de entradas do ledger. ✅
+5. **Passo 4.5:** Cadastro real (`POST /api/users`) + toast + redirect. ✅
+6. **Passo 4.6:** Extrato paginado com filtros (tipo, período) e formatação pt-BR. ✅
+7. **Passo 4.7:** Tailwind CSS v4 + componentes reutilizáveis (Button, Input, Select, Modal, Card, Badge). ✅
+
+### 🔮 Próximos Passos Opcionais (Pós-Fase 4)
+*Estes itens não são obrigatórios para o MVP, mas agregam qualidade profissional e são ótimos para aprendizado contínuo:*
+
+- [ ] **Testes de Frontend** — Vitest + React Testing Library
+  - Unitários de componentes UI (`Button`, `Input`, `Modal`, `Card`, `Badge`)
+  - Integração de páginas (`Login`, `Dashboard`, `Statement`) com MSW (Mock Service Worker)
+  - Cobertura de código (target ≥ 80%)
+
+- [ ] **PWA (Progressive Web App)** — Service Worker + Web App Manifest
+  - `vite-plugin-pwa` para gerar SW com Workbox
+  - Cache offline (API GET de saldo/extrato + assets estáticos)
+  - Install prompt (ícone, splash screen, `beforeinstallprompt`)
+  - Atualização em background (skipWaiting + clients.claim)
+
+- [ ] **Acessibilidade (a11y)** — axe-core + testes manuais
+  - `axe-core` no CI (GitHub Actions) — falha build se violações `critical`/`serious`
+  - Navegação 100% por teclado (foco visível, `tabindex`, `aria-*`)
+  - Screen reader (NVDA/VoiceOver) — labels, `role`, `aria-live` para toasts
+  - Contraste WCAG AA (cores do Tailwind já ajudam, validar customizações)
+
+- [ ] **Deploy Produção** — Pipeline completo
+  - **Backend:** Render/Railway + variáveis de ambiente (`JWT_SECRET`, `WEBHOOK_SECRET`, `DATABASE_URL`, `CORS_ORIGIN=https://seu-frontend.vercel.app`)
+  - **Banco:** Neon/Supabase (PostgreSQL gerenciado) + migrações Flyway no startup
+  - **Frontend:** Vercel (build `npm run build` → output `dist/`) + env `VITE_API_URL=https://seu-backend.render.com/api`
+  - **Observabilidade:** Logs estruturados (JSON), health check endpoint, métricas (Micrometer + Prometheus/Grafana opcional)
+
+- [ ] **Storybook** — Documentação viva dos componentes UI
+  - `npx storybook@latest init` (React + Vite + TS)
+  - Stories para cada variante de `Button`, `Input`, `Modal`, `Card`, `Badge`
+  - Controles interativos (Controls addon) + testes visuais (Chromatic opcional)
+  - Publicar no Chromatic ou GitHub Pages como design system interno
