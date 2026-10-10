@@ -1,18 +1,54 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import api from '../services/api'
+import { useToast } from '../context/ToastContext'
 
 /**
- * Tela de cadastro — mesma ideia do Login: estado para cada campo,
- * handler de submit que impede recarregamento.
+ * Tela de Cadastro — agora **chama a API real** do backend.
+ *
+ * Fluxo:
+ * 1. Usuário preenche nome, e-mail, senha.
+ * 2. Submit → POST /api/users (público, sem token).
+ * 3. Sucesso (201) → toast "Conta criada!" + redireciona para /login.
+ * 4. Erro (400/409) → toast com mensagem do backend (RFC 7807).
+ *
+ * Conceitos:
+ * - **useNavigate**: redirecionamento programático após sucesso.
+ * - **useToast**: feedback visual não-bloqueante.
+ * - **loading state**: desabilita botão durante request.
  */
 export default function Register() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const navigate = useNavigate()
+  const { success, error: toastError } = useToast()
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log('Cadastro simulado:', { name, email, password })
-    // Fase 4.2: POST /api/users → sucesso → redireciona para /login
+    if (!name.trim() || !email.trim() || !password.trim()) return
+    setLoading(true)
+
+    try {
+      // POST /api/users → { id, name, email, defaultAccountId, createdAt }
+      await api.post('/users', { name, email, password })
+
+      success('Conta criada com sucesso! Faça login para entrar.')
+      // replace: true impede "Voltar" no navegador cair no cadastro de novo
+      navigate('/login', { replace: true })
+    } catch (err: unknown) {
+      const axiosError = err as { response?: { status?: number; data?: { detail?: string; errors?: Record<string, string> } } }
+      const resp = axiosError.response?.data
+      // Backend devolve RFC 7807: { detail, errors: { campo: mensagem } }
+      const msg = resp?.errors
+        ? Object.entries(resp.errors).map(([k, v]) => `${k}: ${v}`).join('; ')
+        : resp?.detail ?? 'Erro ao criar conta. Tente novamente.'
+      toastError(msg)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -28,6 +64,7 @@ export default function Register() {
             onChange={(e) => setName(e.target.value)}
             placeholder="Seu nome"
             required
+            disabled={loading}
             style={inputStyle}
           />
         </div>
@@ -40,6 +77,7 @@ export default function Register() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="seu@email.com"
             required
+            disabled={loading}
             style={inputStyle}
           />
         </div>
@@ -53,16 +91,16 @@ export default function Register() {
             placeholder="••••••••"
             required
             minLength={6}
+            disabled={loading}
             style={inputStyle}
           />
         </div>
-        <button type="submit" style={buttonStyle}>Criar conta</button>
+        <button type="submit" disabled={loading} style={buttonStyle}>
+          {loading ? 'Criando…' : 'Criar conta'}
+        </button>
       </form>
       <p style={{ marginTop: '1rem', color: '#666' }}>
         Já tem conta? <a href="/login">Entre</a>
-      </p>
-      <p style={{ marginTop: '1rem', fontSize: '0.85rem', color: '#888' }}>
-        🚧 Placeholder da Fase 4.1 — integração real na Fase 4.2
       </p>
     </div>
   )
