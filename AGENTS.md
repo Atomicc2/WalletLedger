@@ -213,6 +213,12 @@ Todos os commits devem seguir o padrão:
     - `Login.tsx` atualizado: chama `POST /api/auth/login`, guarda token, redireciona com `useNavigate('/dashboard')`, estados `loading`/`error`.
     - Backend: `SecurityConfig` ganha `@Bean CorsConfigurationSource` permitindo `http://localhost:5173` (origem do Vite dev server), headers `Authorization` e `Content-Type`, preflight `OPTIONS` cacheado.
     - Build frontend ✅ + backend 61 testes ✅.
+  - **Passo 4.3 (Concluído — 2026-10-09):** Dashboard/Extrato com API real + Guard de rota protegida.
+    - Backend: `AccountController` ganha `GET /api/accounts/me/balance` e `GET /api/accounts/me/statement` — resolvem conta do usuário autenticado (SecurityContext → email → User → Account), evitando expor UUID na URL.
+    - Frontend: `src/components/RequireAuth.tsx` — guard que lê `hasToken()` e renderiza `<Outlet />` ou redireciona para `/login` (protege rotas filhas no React Router).
+    - `Dashboard.tsx` + `Statement.tsx` atualizados: `useEffect` busca dados na API (`/me/balance`, `/me/statement`), estados `loading`/`error`, botão "Sair" limpa token + navega para `/login`.
+    - `App.tsx` reestruturado: rotas protegidas filhas de `<Route element={<RequireAuth />}>`.
+    - Build frontend ✅ + backend 61 testes ✅.
 - [x] **Governança:**
   - `.gitignore` robusto cobrindo builds, Maven, IDEs e dependências futuras.
   - `README.md` documentado.

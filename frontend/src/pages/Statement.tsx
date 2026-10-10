@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import api from '../services/api'
 
 /**
- * Extrato — lista de lançamentos (LedgerEntry).
- * Aqui usamos **estado para lista** (`LedgerEntry[]`) e `useEffect` para buscar.
- * O TypeScript força a gente a tipar o array: `LedgerEntry[]`.
+ * Extrato — lista de lançamentos reais da API.
  */
 interface LedgerEntry {
   id: string
@@ -16,22 +16,42 @@ interface LedgerEntry {
 export default function Statement() {
   const [entries, setEntries] = useState<LedgerEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const navigate = useNavigate()
 
   useEffect(() => {
+    let mounted = true
+
     const fetchStatement = async () => {
-      // const resp = await api.get('/accounts/me/statement') // Fase 4.3
-      // setEntries(resp.data)
-      setEntries([
-        { id: '1', type: 'CREDIT', amount: 500, description: 'Depósito inicial', createdAt: '2026-10-08T10:30:00Z' },
-        { id: '2', type: 'DEBIT', amount: 50, description: 'Transferência para João', createdAt: '2026-10-08T14:15:00Z' },
-        { id: '3', type: 'CREDIT', amount: 200, description: 'Depósito via PIX', createdAt: '2026-10-09T09:00:00Z' },
-      ])
-      setLoading(false)
+      try {
+        const response = await api.get('/accounts/me/statement')
+        // Backend devolve array de { id, accountId, entryType, amount, createdAt }
+        if (mounted) {
+          setEntries(response.data.map((e: any) => ({
+            id: e.id,
+            type: e.entryType,
+            amount: e.amount,
+            description: e.entryType === 'CREDIT' ? 'Crédito recebido' : 'Débito realizado',
+            createdAt: e.createdAt,
+          })))
+          setLoading(false)
+        }
+      } catch (err: unknown) {
+        if (!mounted) return
+        const axiosError = err as { response?: { status?: number; data?: { detail?: string } } }
+        if (axiosError.response?.status !== 401) {
+          setError(axiosError.response?.data?.detail ?? 'Erro ao carregar extrato.')
+        }
+        setLoading(false)
+      }
     }
+
     fetchStatement()
+    return () => { mounted = false }
   }, [])
 
-  const formatMoney = (v: number) => `R$ ${v.toFixed(2).replace('.', ',')}`
+  const formatMoney = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
 
   return (
     <div style={containerStyle}>
@@ -40,7 +60,7 @@ export default function Statement() {
         <nav style={navStyle}>
           <a href="/dashboard" style={linkStyle}>Dashboard</a>
           <a href="/extrato" style={{ ...linkStyle, fontWeight: 'bold' }}>Extrato</a>
-          <button onClick={() => console.log('Logout simulado')} style={logoutBtn}>Sair</button>
+          <button onClick={() => { localStorage.removeItem('walletledger_token'); navigate('/login') }} style={logoutBtn}>Sair</button>
         </nav>
       </header>
 
@@ -53,6 +73,8 @@ export default function Statement() {
 
           {loading ? (
             <p style={{ textAlign: 'center', color: '#666', padding: '2rem' }}>Carregando…</p>
+          ) : error ? (
+            <p style={errorStyle}>{error}</p>
           ) : entries.length === 0 ? (
             <p style={{ textAlign: 'center', color: '#999', padding: '2rem' }}>Nenhum lançamento ainda.</p>
           ) : (
@@ -68,7 +90,7 @@ export default function Statement() {
               <tbody>
                 {entries.map((e) => (
                   <tr key={e.id}>
-                    <td>{new Date(e.createdAt).toLocaleDateString('pt-BR')}</td>
+                    <td>{new Date(e.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
                     <td>
                       <span style={{ ...badgeStyle, background: e.type === 'CREDIT' ? '#dcfce7' : '#fee2e2', color: e.type === 'CREDIT' ? '#166534' : '#991b1b' }}>
                         {e.type === 'CREDIT' ? '➕ Crédito' : '➖ Débito'}
@@ -76,7 +98,7 @@ export default function Statement() {
                     </td>
                     <td>{e.description}</td>
                     <td style={moneyTd}>
-                      {e.type === 'CREDIT' ? '+' : '−'} {formatMoney(e.amount)}
+                      {e.type === 'CREDIT' ? '+' : '−'} R$ {formatMoney(e.amount)}
                     </td>
                   </tr>
                 ))}
@@ -87,7 +109,7 @@ export default function Statement() {
       </main>
 
       <p style={{ marginTop: '2rem', fontSize: '0.85rem', color: '#888', textAlign: 'center' }}>
-        🚧 Placeholder da Fase 4.1 — integração real na Fase 4.3
+        🚧 Placeholder da Fase 4.1 — integração real completa na Fase 4.4
       </p>
     </div>
   )
@@ -104,3 +126,4 @@ const tableStyle = { width: '100%', borderCollapse: 'collapse' } as const
 const moneyTh = { textAlign: 'right', padding: '0.75rem', background: '#f9fafb', borderBottom: '1px solid #e5e7eb' } as const
 const moneyTd = { textAlign: 'right', padding: '0.75rem', fontWeight: 600, fontFamily: 'monospace' } as const
 const badgeStyle = { padding: '0.25rem 0.5rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 600 } as const
+const errorStyle = { textAlign: 'center', padding: '2rem', color: '#991b1b', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px' } as const

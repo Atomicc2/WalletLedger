@@ -1,28 +1,51 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import api from '../services/api'
 
 /**
- * Dashboard — tela principal logada.
- * Aqui introduzimos **useEffect**: hook para **efeitos colaterais**
- * (buscar dados da API, assinar eventos, timers).
+ * Dashboard — tela principal logada. Busca saldo real da API.
  *
- * Sintaxe: useEffect(() => { ... }, [dependências])
- * - O array vazio [] = "roda **uma vez** ao montar o componente" (≈ @PostConstruct).
- * - Se tivesse [token] = "roda sempre que 'token' mudar".
+ * Fluxo:
+ * 1. Monta o componente → useEffect roda uma vez ([]).
+ * 2. Chama GET /api/accounts/me/balance (interceptor injeta Bearer token).
+ * 3. Sucesso → setBalance + setLoading(false).
+ * 4. Erro 401 → interceptor já limpa token e redireciona para /login.
+ *    Erro outro → mostra mensagem amigável.
  */
 export default function Dashboard() {
   const [balance, setBalance] = useState<string>('—')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // Simula a busca de saldo (Fase 4.3 fará o fetch real com token)
+  const navigate = useNavigate()
+
   useEffect(() => {
+    let mounted = true
+
     const fetchBalance = async () => {
-      // const resp = await api.get('/accounts/me/balance')  // Fase 4.3
-      // setBalance(resp.data.balance)
-      setBalance('R$ 1.234,56') // mock
-      setLoading(false)
+      try {
+        const response = await api.get('/accounts/me/balance')
+        // Backend devolve: { accountId, balance, currency }
+        if (mounted) {
+          setBalance(`${response.data.currency} ${response.data.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`)
+          setLoading(false)
+        }
+      } catch (err: unknown) {
+        if (!mounted) return
+        const axiosError = err as { response?: { status?: number; data?: { detail?: string } } }
+        // 401 já tratado pelo interceptor (redireciona para /login)
+        if (axiosError.response?.status !== 401) {
+          setError(axiosError.response?.data?.detail ?? 'Erro ao carregar saldo.')
+        }
+        setLoading(false)
+      }
     }
+
     fetchBalance()
-  }, []) // [] = roda só no mount
+
+    // Cleanup: evita setState se componente desmontar antes da resposta
+    return () => { mounted = false }
+  }, [])
 
   return (
     <div style={containerStyle}>
@@ -31,7 +54,7 @@ export default function Dashboard() {
         <nav style={navStyle}>
           <a href="/dashboard" style={linkStyle}>Dashboard</a>
           <a href="/extrato" style={linkStyle}>Extrato</a>
-          <button onClick={() => console.log('Logout simulado')} style={logoutBtn}>Sair</button>
+          <button onClick={() => { localStorage.removeItem('walletledger_token'); navigate('/login') }} style={logoutBtn}>Sair</button>
         </nav>
       </header>
 
@@ -39,19 +62,20 @@ export default function Dashboard() {
         <section style={cardStyle}>
           <h2 style={{ marginTop: 0 }}>Seu saldo</h2>
           <p style={balanceStyle}>{loading ? 'Carregando…' : balance}</p>
+          {error && <p style={errorStyle}>{error}</p>}
         </section>
 
         <section style={cardStyle}>
           <h3>Ações rápidas</h3>
           <div style={actionsStyle}>
-            <button style={actionBtn}>💸 Depositar</button>
-            <button style={actionBtn}>🔄 Transferir</button>
+            <button style={actionBtn} disabled={loading}>💸 Depositar</button>
+            <button style={actionBtn} disabled={loading}>🔄 Transferir</button>
           </div>
         </section>
       </main>
 
       <p style={{ marginTop: '2rem', fontSize: '0.85rem', color: '#888', textAlign: 'center' }}>
-        🚧 Placeholder da Fase 4.1 — integração real com API na Fase 4.3
+        🚧 Placeholder da Fase 4.1 — integração real dos botões na Fase 4.4
       </p>
     </div>
   )
@@ -67,3 +91,4 @@ const cardStyle = { background: '#fff', border: '1px solid #e5e7eb', borderRadiu
 const balanceStyle = { fontSize: '2.5rem', fontWeight: 700, color: '#16a34a', margin: '0.5rem 0' } as const
 const actionsStyle = { display: 'flex', gap: '1rem' } as const
 const actionBtn = { flex: 1, padding: '1rem', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '1rem', cursor: 'pointer' } as const
+const errorStyle = { color: '#991b1b', background: '#fef2f2', border: '1px solid #fecaca', padding: '0.75rem', borderRadius: '4px', marginTop: '1rem' } as const
