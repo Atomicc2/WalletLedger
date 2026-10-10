@@ -225,6 +225,14 @@ Todos os commits devem seguir o padrão:
     - `Dashboard.tsx`: modais de **Depositar** (valor) e **Transferir** (destino UUID + valor), formulários controlados, `useToast` para feedback, `fetchBalance()` após sucesso (saldo atualiza sem recarregar), `idempotencyKey` via `crypto.randomUUID()`.
     - `App.tsx` envolto em `<ToastProvider>`.
     - Build frontend ✅ + backend 61 testes ✅.
+  - **Passo 4.5 (Concluído — 2026-10-10):** Cadastro real `POST /api/users` + toast + redirect.
+    - `Register.tsx`: chama `api.post('/users')`, trata erros RFC 7807 (`detail` + `errors`), `navigate('/login', { replace: true })`, loading state.
+    - Build frontend ✅ + backend 61 testes ✅.
+  - **Passo 4.6 (Concluído — 2026-10-10):** Extrato paginado com filtros e formatação completa.
+    - Backend: `LedgerEntryRepository` ganha métodos paginados (`Page<LedgerEntry>`) com filtros por tipo (`EntryType`) e período (`Instant` range); `PageResponse<T>` DTO genérico.
+    - `AccountController`: `GET /api/accounts/me/statement` aceita `page`, `size`, `sort`, `type`, `startDate`, `endDate` → devolve `PageResponse<LedgerEntryResponse>`.
+    - Frontend: `Statement.tsx` reescrito com paginação (anterior/próxima, info de página), filtros (tipo: TODOS/CRÉDITO/DÉBITO, data início/fim), formatação data+hora pt-BR, limpar filtros.
+    - Build frontend ✅ + backend 61 testes ✅.
 - [x] **Governança:**
   - `.gitignore` robusto cobrindo builds, Maven, IDEs e dependências futuras.
   - `README.md` documentado.
