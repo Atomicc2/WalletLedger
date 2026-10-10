@@ -26,6 +26,7 @@ O **WalletLedger** é um sistema financeiro focado em **integridade contábil e 
 
 ## ✅ Funcionalidades
 
+### Backend (Fases 1–3 + 3.4)
 - [x] **Cadastro de usuário** com hash **BCrypt** e abertura automática de carteira
 - [x] **Login via JWT** (HS256, expiração de 24h) — API stateless
 - [x] **Depósito síncrono** (`201`) — partida dupla: `DEBIT SYSTEM` + `CREDIT usuário`
@@ -39,7 +40,15 @@ O **WalletLedger** é um sistema financeiro focado em **integridade contábil e 
 - [x] **Tratamento global de erros** no padrão **RFC 7807** (`application/problem+json`)
 - [x] **Autorização de dono-de-conta** (`OwnershipGuard`) — bloqueio de IDOR em todas as rotas
 - [x] **Testes automatizados** (unitários, slice JPA e integração) — **61 testes**
-- [ ] **Frontend React** (Fase 4 — em andamento)
+
+### Frontend (Fase 4 — Concluída)
+- [x] **Setup** Vite + React 19 + TypeScript + React Router
+- [x] **Autenticação** Axios + JWT interceptor (request/response) + CORS configurado
+- [x] **Login/Cadastro** reais com validação, toast e redirecionamento
+- [x] **Dashboard** com saldo real, modais de Depositar/Transferir, idempotência
+- [x] **Extrato** paginado com filtros (tipo, período) e formatação pt-BR
+- [x] **Design System** Tailwind CSS v4 + componentes reutilizáveis (Button, Input, Select, Modal, Card, Badge)
+- [x] **Guarda de rotas** (`RequireAuth`) + logout com limpeza de token
 
 ---
 
@@ -133,13 +142,21 @@ cd backend
 mvn test          # 61 testes (unit + slice JPA + integração)
 ```
 
-### 5. Frontend (Fase 4 — em construção)
+### 5. Frontend (Fase 4 — Concluída)
 
 ```bash
 cd frontend
-npm install
-npm run dev       # http://localhost:5173
+npm install       # instala dependências (React, Tailwind, Axios, React Router, etc.)
+npm run dev       # sobe servidor de dev em http://localhost:5173 (hot-reload)
 ```
+
+**Build de produção do frontend:**
+```bash
+cd frontend
+npm run build     # gera pasta dist/ otimizada (tsc + vite build)
+```
+
+> 🔗 **CORS** já configurado no backend para permitir `http://localhost:5173`. Se mudar a porta do Vite, atualize `SecurityConfig.corsConfigurationSource()`.
 
 ### ⚙️ Configurações principais (`backend/src/main/resources/application.properties`)
 
@@ -168,8 +185,11 @@ Base URL: `http://localhost:8080`
 | `POST` | `/api/transactions/deposit-async` | JWT + dono | Depósito assíncrono → `202` (`PENDING`) |
 | `POST` | `/api/transactions/transfer` | JWT + origem própria | Transferência entre contas → `201` |
 | `POST` | `/api/transactions/reverse` | JWT + participante | Estorno da transação → `201` |
-| `GET` | `/api/accounts/{id}/balance` | JWT + dono | Saldo atual da conta |
-| `GET` | `/api/accounts/{id}/statement` | JWT + dono | Extrato de lançamentos |
+| `GET` | `/api/accounts/me` | JWT | Dados da conta do usuário autenticado (ID + moeda) |
+| `GET` | `/api/accounts/me/balance` | JWT | Saldo da conta do usuário autenticado |
+| `GET` | `/api/accounts/me/statement` | JWT | Extrato paginado (query: `page`, `size`, `sort`, `type`, `startDate`, `endDate`) |
+| `GET` | `/api/accounts/{id}/balance` | JWT + dono | Saldo de conta específica (por UUID) |
+| `GET` | `/api/accounts/{id}/statement` | JWT + dono | Extrato completo (legado, sem paginação) |
 | `POST` | `/api/webhooks/payment` | `X-Webhook-Secret` | Liquidação (`APPROVED`/`REJECTED`) |
 
 ### Exemplos
@@ -182,13 +202,25 @@ curl -X POST http://localhost:8080/api/auth/login \
 # → { "accessToken": "eyJ...", "tokenType": "Bearer", "expiresIn": 86400 }
 ```
 
-**Depósito com idempotência:**
+**Depósito com idempotência (usando conta própria):**
 ```bash
+# 1. Descobre o UUID da própria conta
+curl -X GET http://localhost:8080/api/accounts/me \
+  -H "Authorization: Bearer $TOKEN"
+# → { "accountId": "uuid-da-conta", "currency": "BRL" }
+
+# 2. Deposita na própria conta
 curl -X POST http://localhost:8080/api/transactions/deposit \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"idempotencyKey":"11111111-2222-3333-4444-555555555555",
-       "targetAccountId":"<uuid-da-conta>","amount":100.00}'
+       "targetAccountId":"uuid-da-conta","amount":100.00}'
+```
+
+**Extrato paginado com filtros:**
+```bash
+curl -X GET "http://localhost:8080/api/accounts/me/statement?page=0&size=10&sort=createdAt,desc&type=CREDIT&startDate=2026-10-01&endDate=2026-10-10" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ### Formato de erro (RFC 7807)
@@ -235,7 +267,7 @@ cd backend && mvn test
 - **Webhook** com secret em header comparado em **tempo constante** (`MessageDigest.isEqual` — proteção contra *timing attack*).
 - **Autorização de dono-de-conta** (`OwnershipGuard`): corrigido o **IDOR** em todas as rotas — saldo/extrato só do dono, transferência exige origem própria, estorno exige participação na transação.
 
-**Dívidas conhecidas (futuro):** rate limiting no login, papéis/RBAC, secrets via variáveis de ambiente + assinatura HMAC do webhook, CORS (entra na Fase 4).
+**Dívidas conhecidas (futuro):** rate limiting no login, papéis/RBAC, secrets via variáveis de ambiente + assinatura HMAC do webhook.
 
 ---
 
@@ -246,7 +278,14 @@ cd backend && mvn test
 - [x] **Fase 2.5** — Testes automatizados (pirâmide: unit → slice → integração)
 - [x] **Fase 3** — Assíncrono e resiliência (depósito async, webhook, fila/worker, estorno, RFC 7807)
 - [x] **Passo 3.4** — Revisão de segurança e autorização de dono-de-conta
-- [ ] **Fase 4** — Frontend React (Vite + TypeScript): setup, login/cadastro, dashboard, extrato
+- [x] **Fase 4** — Frontend React (Vite + TypeScript + Tailwind)
+  - [x] 4.1 Setup Vite + React 19 + TS + React Router
+  - [x] 4.2 Axios + JWT interceptor + CORS backend
+  - [x] 4.3 Dashboard/Extrato API real + RequireAuth guard
+  - [x] 4.4 Depositar/Transferir modais + Toast + endpoint /me
+  - [x] 4.5 Cadastro real + redirect
+  - [x] 4.6 Extrato paginado com filtros
+  - [x] 4.7 Tailwind CSS + componentes reutilizáveis (Button, Input, Modal, Card, Badge)
 
 ---
 
