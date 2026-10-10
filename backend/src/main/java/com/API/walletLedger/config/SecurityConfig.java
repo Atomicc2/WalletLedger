@@ -10,6 +10,11 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -21,6 +26,9 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
+            // CORS deve vir ANTES do csrf/authorizeHttpRequests para que preflight (OPTIONS) passe
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+
             // 1. Desabilita proteção CSRF (Cross-Site Request Forgery)
             .csrf(csrf -> csrf.disable())
 
@@ -55,5 +63,28 @@ public class SecurityConfig {
             // 5. Registra o filtro JWT antes do filtro padrão de autenticação por usuário/senha
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
             .build();
+    }
+
+    /**
+     * Configuração CORS para permitir o frontend (Vite dev server: localhost:5173)
+     * acessar a API.
+     *
+     * Por que precisa? Navegador bloqueia requests cross-origin (porta diferente)
+     * a menos que o servidor responda headers Access-Control-Allow-Origin, etc.
+     *
+     * Em produção: troque "http://localhost:5173" pela URL real do frontend (ex.: Vercel).
+     */
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(List.of("http://localhost:5173"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        config.setAllowCredentials(true); // necessário para cookies; com Bearer token é opcional mas inofensivo
+        config.setMaxAge(3600L); // cache do preflight (OPTIONS) por 1h
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
     }
 }

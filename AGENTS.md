@@ -199,7 +199,20 @@ Todos os commits devem seguir o padrão:
   - **Regras aplicadas:** `balance`/`statement` só de conta própria; `deposit`/`deposit-async` só creditam destino próprio; `transfer` exige **origem própria** (destino livre = a própria feature); `reverse` exige participação na transação.
   - **Testes:** `AccountOwnershipIntegrationTest` (6) + `TransactionOwnershipIntegrationTest` (5) — incluem o ataque original (transferência com `sourceAccountId` de terceiro → 403) e regressões dos fluxos felizes.
   - **Nota:** o acesso lazy (`account.getUser()`) no controller funciona porque o Spring Boot liga o **OSIV** (`spring.jpa.open-in-view=true`, default) — em testes, o `@Transactional` do teste também sustenta.
-  - **Dívidas de segurança restantes (futuro):** sem roles/RBAC, sem rate limiting no login, secrets de webhook/JWT versionados (produção = env var + assinatura HMAC), CORS pendente (entra na Fase 4).
+  - **Dívidas de segurança restantes (futuro):** sem roles/RBAC, sem rate limiting no login, secrets de webhook/JWT versionados (produção = env var + assinatura HMAC), **CORS configurado (Fase 4.2)**.
+- [x] **Fase 4 — Frontend React (Iniciada):**
+  - **Passo 4.1 (Concluído — 2026-10-09):** Setup do projeto **Vite + React 19 + TypeScript 6** (`create-vite --template react-ts`).
+    - `npm install react-router-dom` — roteamento SPA (Single Page Application).
+    - Páginas criadas: `Login`, `Cadastro`, `Dashboard`, `Extrato` (placeholders com UI didática).
+    - `App.tsx` com `BrowserRouter`, rotas públicas (`/login`, `/cadastro`) e rotas que exigem login (`/`, `/dashboard`, `/extrato`) + fallback `*` → `/login`.
+    - Conceitos explicados no código: componente, JSX, `useState`, `useEffect`, roteamento SPA vs Spring MVC, `as const` para estilos inline (TS 6 estrito).
+    - Build verificado: `npm run build` (`tsc -b && vite build`) ✅.
+  - **Passo 4.2 (Concluído — 2026-10-09):** Interceptor HTTP (Axios) + JWT + CORS no backend.
+    - `src/services/token.ts`: helpers `getToken/setToken/removeToken` usando `localStorage`.
+    - `src/services/api.ts`: instância `axios` com `baseURL`, **request interceptor** injeta `Authorization: Bearer <token>`, **response interceptor** trata **401** → limpa token + redireciona para `/login`.
+    - `Login.tsx` atualizado: chama `POST /api/auth/login`, guarda token, redireciona com `useNavigate('/dashboard')`, estados `loading`/`error`.
+    - Backend: `SecurityConfig` ganha `@Bean CorsConfigurationSource` permitindo `http://localhost:5173` (origem do Vite dev server), headers `Authorization` e `Content-Type`, preflight `OPTIONS` cacheado.
+    - Build frontend ✅ + backend 61 testes ✅.
 - [x] **Governança:**
   - `.gitignore` robusto cobrindo builds, Maven, IDEs e dependências futuras.
   - `README.md` documentado.
