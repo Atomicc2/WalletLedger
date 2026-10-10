@@ -233,6 +233,11 @@ Todos os commits devem seguir o padrão:
     - `AccountController`: `GET /api/accounts/me/statement` aceita `page`, `size`, `sort`, `type`, `startDate`, `endDate` → devolve `PageResponse<LedgerEntryResponse>`.
     - Frontend: `Statement.tsx` reescrito com paginação (anterior/próxima, info de página), filtros (tipo: TODOS/CRÉDITO/DÉBITO, data início/fim), formatação data+hora pt-BR, limpar filtros.
     - Build frontend ✅ + backend 61 testes ✅.
+  - **Passo 4.7 (Concluído — 2026-10-10):** Tailwind CSS + componentes reutilizáveis.
+    - Instalação: `tailwindcss` v4 + `@tailwindcss/vite` plugin, configuração no `vite.config.ts` + `@import "tailwindcss"` no `index.css`.
+    - Componentes criados em `src/components/ui/`: `Button` (variantes primary/secondary/danger/ghost/success, tamanhos, loading), `Input` (label, erro, hint), `Select` (opções), `Modal` (overlay, acessível, tamanhos), `Card` (padding, hover), `Badge` (variantes success/danger/warning/info/neutral).
+    - Refatoração: `Login.tsx`, `Register.tsx`, `Dashboard.tsx`, `Statement.tsx` migrados para usar componentes UI (eliminados ~300 linhas de estilos inline).
+    - Build frontend ✅ (CSS 20.7 kB gzipped) + backend 61 testes ✅.
 - [x] **Governança:**
   - `.gitignore` robusto cobrindo builds, Maven, IDEs e dependências futuras.
   - `README.md` documentado.

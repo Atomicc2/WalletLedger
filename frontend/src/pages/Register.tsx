@@ -2,20 +2,10 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { useToast } from '../context/ToastContext'
+import { Button, Input, Card } from '../components/ui'
 
 /**
- * Tela de Cadastro — agora **chama a API real** do backend.
- *
- * Fluxo:
- * 1. Usuário preenche nome, e-mail, senha.
- * 2. Submit → POST /api/users (público, sem token).
- * 3. Sucesso (201) → toast "Conta criada!" + redireciona para /login.
- * 4. Erro (400/409) → toast com mensagem do backend (RFC 7807).
- *
- * Conceitos:
- * - **useNavigate**: redirecionamento programático após sucesso.
- * - **useToast**: feedback visual não-bloqueante.
- * - **loading state**: desabilita botão durante request.
+ * Tela de Cadastro — usa componentes UI reutilizáveis.
  */
 export default function Register() {
   const [name, setName] = useState('')
@@ -32,16 +22,12 @@ export default function Register() {
     setLoading(true)
 
     try {
-      // POST /api/users → { id, name, email, defaultAccountId, createdAt }
       await api.post('/users', { name, email, password })
-
       success('Conta criada com sucesso! Faça login para entrar.')
-      // replace: true impede "Voltar" no navegador cair no cadastro de novo
       navigate('/login', { replace: true })
     } catch (err: unknown) {
       const axiosError = err as { response?: { status?: number; data?: { detail?: string; errors?: Record<string, string> } } }
       const resp = axiosError.response?.data
-      // Backend devolve RFC 7807: { detail, errors: { campo: mensagem } }
       const msg = resp?.errors
         ? Object.entries(resp.errors).map(([k, v]) => `${k}: ${v}`).join('; ')
         : resp?.detail ?? 'Erro ao criar conta. Tente novamente.'
@@ -52,12 +38,16 @@ export default function Register() {
   }
 
   return (
-    <div style={containerStyle}>
-      <h2>📝 Cadastro</h2>
-      <form onSubmit={handleSubmit} style={formStyle}>
-        <div style={fieldStyle}>
-          <label htmlFor="name">Nome</label>
-          <input
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
+      <Card className="w-full max-w-md" padding="lg">
+        <div className="text-center mb-8">
+          <h1 className="text-2xl font-bold text-gray-900">💰 WalletLedger</h1>
+          <p className="text-gray-500 mt-1">Crie sua conta</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Input
+            label="Nome"
             id="name"
             type="text"
             value={name}
@@ -65,12 +55,12 @@ export default function Register() {
             placeholder="Seu nome"
             required
             disabled={loading}
-            style={inputStyle}
+            autoComplete="name"
+            autoFocus
           />
-        </div>
-        <div style={fieldStyle}>
-          <label htmlFor="email">E-mail</label>
-          <input
+
+          <Input
+            label="E-mail"
             id="email"
             type="email"
             value={email}
@@ -78,12 +68,11 @@ export default function Register() {
             placeholder="seu@email.com"
             required
             disabled={loading}
-            style={inputStyle}
+            autoComplete="email"
           />
-        </div>
-        <div style={fieldStyle}>
-          <label htmlFor="password">Senha</label>
-          <input
+
+          <Input
+            label="Senha"
             id="password"
             type="password"
             value={password}
@@ -92,22 +81,19 @@ export default function Register() {
             required
             minLength={6}
             disabled={loading}
-            style={inputStyle}
+            autoComplete="new-password"
+            hint="Mínimo 6 caracteres"
           />
-        </div>
-        <button type="submit" disabled={loading} style={buttonStyle}>
-          {loading ? 'Criando…' : 'Criar conta'}
-        </button>
-      </form>
-      <p style={{ marginTop: '1rem', color: '#666' }}>
-        Já tem conta? <a href="/login">Entre</a>
-      </p>
+
+          <Button type="submit" variant="success" fullWidth loading={loading} size="lg">
+            {loading ? 'Criando…' : 'Criar conta'}
+          </Button>
+        </form>
+
+        <p className="mt-6 text-center text-gray-600 text-sm">
+          Já tem conta? <a href="/login" className="text-blue-600 hover:underline font-medium">Entre</a>
+        </p>
+      </Card>
     </div>
   )
 }
-
-const containerStyle = { maxWidth: '360px', margin: '3rem auto', padding: '1.5rem', border: '1px solid #ddd', borderRadius: '8px', fontFamily: 'system-ui' } as const
-const formStyle = { display: 'flex', flexDirection: 'column', gap: '1rem' } as const
-const fieldStyle = { display: 'flex', flexDirection: 'column', gap: '0.35rem' } as const
-const inputStyle = { padding: '0.6rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '1rem' } as const
-const buttonStyle = { padding: '0.7rem', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '1rem', cursor: 'pointer' } as const

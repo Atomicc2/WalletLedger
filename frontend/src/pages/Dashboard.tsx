@@ -2,25 +2,17 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { useToast } from '../context/ToastContext'
+import { Button, Input, Card, Modal } from '../components/ui'
 
 /**
- * Dashboard — tela principal logada.
+ * Dashboard — tela principal logada com modais de Depositar/Transferir.
  *
- * Novos recursos (Fase 4.4):
- * - **Modais** de Depositar / Transferir (estado `isDepositOpen` / `isTransferOpen`)
- * - **Formulários controlados** (`useState` por campo)
- * - **Toast** via `useToast()` — feedback visual não-bloqueante
- * - **Refetch de saldo** após sucesso (chama `fetchBalance()` novamente)
- * - **idempotencyKey** gerada no frontend (`crypto.randomUUID()`)
- * - Busca **conta do usuário** (`/api/accounts/me`) no mount para obter o UUID
- *   e usar em depósito (targetAccountId = própria conta) e transferência (sourceAccountId = própria conta)
+ * Usa componentes UI: Card, Button, Input, Modal, Badge.
  */
 export default function Dashboard() {
   const [balance, setBalance] = useState<string>('—')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  // UUID da conta do usuário autenticado (obtido via /api/accounts/me)
   const [myAccountId, setMyAccountId] = useState<string | null>(null)
 
   // Estados dos modais
@@ -32,7 +24,7 @@ export default function Dashboard() {
   const [transferAmount, setTransferAmount] = useState('')
   const [transferTarget, setTransferTarget] = useState('')
 
-  // Loading por ação (para desabilitar botões durante request)
+  // Loading por ação
   const [depositLoading, setDepositLoading] = useState(false)
   const [transferLoading, setTransferLoading] = useState(false)
 
@@ -68,7 +60,7 @@ export default function Dashboard() {
     }
   }, [])
 
-  // Busca inicial: conta + saldo
+  // Busca inicial
   useEffect(() => {
     fetchMyAccount()
     fetchBalance()
@@ -84,13 +76,13 @@ export default function Dashboard() {
     try {
       await api.post('/transactions/deposit', {
         idempotencyKey: crypto.randomUUID(),
-        targetAccountId: myAccountId, // deposita na PRÓPRIA conta
+        targetAccountId: myAccountId,
         amount: parseFloat(depositAmount),
       })
       success('Depósito realizado com sucesso!')
       setIsDepositOpen(false)
       setDepositAmount('')
-      fetchBalance() // atualiza saldo na tela
+      fetchBalance()
     } catch (err: unknown) {
       const axiosError = err as { response?: { status?: number; data?: { detail?: string } } }
       if (axiosError.response?.status !== 401) {
@@ -111,7 +103,7 @@ export default function Dashboard() {
     try {
       await api.post('/transactions/transfer', {
         idempotencyKey: crypto.randomUUID(),
-        sourceAccountId: myAccountId, // transfere DA PRÓPRIA conta
+        sourceAccountId: myAccountId,
         targetAccountId: transferTarget,
         amount: parseFloat(transferAmount),
       })
@@ -136,133 +128,117 @@ export default function Dashboard() {
   }
 
   return (
-    <div style={containerStyle}>
-      <header style={headerStyle}>
-        <h1>💰 WalletLedger</h1>
-        <nav style={navStyle}>
-          <a href="/dashboard" style={linkStyle}>Dashboard</a>
-          <a href="/extrato" style={linkStyle}>Extrato</a>
-          <button onClick={handleLogout} style={logoutBtn}>Sair</button>
-        </nav>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <h1 className="text-xl font-bold text-gray-900">💰 WalletLedger</h1>
+            <nav className="flex items-center gap-4">
+              <a href="/dashboard" className="text-blue-600 hover:text-blue-700 font-medium">Dashboard</a>
+              <a href="/extrato" className="text-blue-600 hover:text-blue-700 font-medium">Extrato</a>
+              <Button variant="danger" size="sm" onClick={handleLogout}>Sair</Button>
+            </nav>
+          </div>
+        </div>
       </header>
 
-      <main style={mainStyle}>
-        <section style={cardStyle}>
-          <h2 style={{ marginTop: 0 }}>Seu saldo</h2>
-          <p style={balanceStyle}>{loading ? 'Carregando…' : balance}</p>
-          {error && <p style={errorStyle}>{error}</p>}
-        </section>
-
-        <section style={cardStyle}>
-          <h3>Ações rápidas</h3>
-          <div style={actionsStyle}>
-            <button onClick={() => setIsDepositOpen(true)} style={actionBtn} disabled={loading || !myAccountId}>💸 Depositar</button>
-            <button onClick={() => setIsTransferOpen(true)} style={actionBtn} disabled={loading || !myAccountId}>🔄 Transferir</button>
+      <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        {/* Saldo */}
+        <Card className="mb-6" padding="lg">
+          <div className="flex items-baseline justify-between">
+            <div>
+              <p className="text-sm text-gray-500">Seu saldo</p>
+              <p className="text-4xl font-bold text-green-600 mt-1">{loading ? 'Carregando…' : balance}</p>
+            </div>
+            {error && <span className="text-red-600 text-sm">{error}</span>}
           </div>
-        </section>
+        </Card>
+
+        {/* Ações rápidas */}
+        <Card className="mb-6" padding="lg">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Ações rápidas</h3>
+          <div className="flex gap-4">
+            <Button variant="primary" onClick={() => setIsDepositOpen(true)} disabled={loading || !myAccountId}>
+              💸 Depositar
+            </Button>
+            <Button variant="secondary" onClick={() => setIsTransferOpen(true)} disabled={loading || !myAccountId}>
+              🔄 Transferir
+            </Button>
+          </div>
+        </Card>
+
+        {/* Modal Depositar */}
+        <Modal
+          isOpen={isDepositOpen}
+          onClose={() => setIsDepositOpen(false)}
+          title="💸 Depositar"
+          size="md"
+        >
+          <form onSubmit={handleDepositSubmit} className="space-y-4">
+            <Input
+              label="Valor (R$)"
+              id="depositAmount"
+              type="number"
+              step="0.01"
+              min="0.01"
+              value={depositAmount}
+              onChange={(e) => setDepositAmount(e.target.value)}
+              placeholder="Ex: 100.00"
+              required
+              autoFocus
+            />
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="ghost" type="button" onClick={() => setIsDepositOpen(false)}>
+                Cancelar
+              </Button>
+              <Button variant="primary" type="submit" loading={depositLoading}>
+                {depositLoading ? 'Depositando…' : 'Confirmar'}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+
+        {/* Modal Transferir */}
+        <Modal
+          isOpen={isTransferOpen}
+          onClose={() => setIsTransferOpen(false)}
+          title="🔄 Transferir"
+          size="md"
+        >
+          <form onSubmit={handleTransferSubmit} className="space-y-4">
+            <Input
+              label="Conta destino (UUID)"
+              id="transferTarget"
+              type="text"
+              value={transferTarget}
+              onChange={(e) => setTransferTarget(e.target.value)}
+              placeholder="UUID da conta destinatária"
+              required
+              autoFocus
+            />
+            <Input
+              label="Valor (R$)"
+              id="transferAmount"
+              type="number"
+              step="0.01"
+              min="0.01"
+              value={transferAmount}
+              onChange={(e) => setTransferAmount(e.target.value)}
+              placeholder="Ex: 50.00"
+              required
+            />
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="ghost" type="button" onClick={() => setIsTransferOpen(false)}>
+                Cancelar
+              </Button>
+              <Button variant="primary" type="submit" loading={transferLoading}>
+                {transferLoading ? 'Transferindo…' : 'Confirmar'}
+              </Button>
+            </div>
+          </form>
+        </Modal>
       </main>
-
-      {/* Modal Depositar */}
-      {isDepositOpen && (
-        <div style={modalOverlay} onClick={() => setIsDepositOpen(false)}>
-          <div style={modalContent} onClick={(e) => e.stopPropagation()}>
-            <h3>💸 Depositar</h3>
-            <form onSubmit={handleDepositSubmit} style={formStyle}>
-              <div style={fieldStyle}>
-                <label htmlFor="depositAmount">Valor (R$)</label>
-                <input
-                  id="depositAmount"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={depositAmount}
-                  onChange={(e) => setDepositAmount(e.target.value)}
-                  placeholder="Ex: 100.00"
-                  required
-                  autoFocus
-                  style={inputStyle}
-                />
-              </div>
-              <div style={modalActions}>
-                <button type="button" onClick={() => setIsDepositOpen(false)} style={cancelBtn}>Cancelar</button>
-                <button type="submit" disabled={depositLoading} style={confirmBtn}>
-                  {depositLoading ? 'Depositando…' : 'Confirmar'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Transferir */}
-      {isTransferOpen && (
-        <div style={modalOverlay} onClick={() => setIsTransferOpen(false)}>
-          <div style={modalContent} onClick={(e) => e.stopPropagation()}>
-            <h3>🔄 Transferir</h3>
-            <form onSubmit={handleTransferSubmit} style={formStyle}>
-              <div style={fieldStyle}>
-                <label htmlFor="transferTarget">Conta destino (UUID)</label>
-                <input
-                  id="transferTarget"
-                  type="text"
-                  value={transferTarget}
-                  onChange={(e) => setTransferTarget(e.target.value)}
-                  placeholder="UUID da conta destinatária"
-                  required
-                  autoFocus
-                  style={inputStyle}
-                />
-              </div>
-              <div style={fieldStyle}>
-                <label htmlFor="transferAmount">Valor (R$)</label>
-                <input
-                  id="transferAmount"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={transferAmount}
-                  onChange={(e) => setTransferAmount(e.target.value)}
-                  placeholder="Ex: 50.00"
-                  required
-                  style={inputStyle}
-                />
-              </div>
-              <div style={modalActions}>
-                <button type="button" onClick={() => setIsTransferOpen(false)} style={cancelBtn}>Cancelar</button>
-                <button type="submit" disabled={transferLoading} style={confirmBtn}>
-                  {transferLoading ? 'Transferindo…' : 'Confirmar'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      <p style={{ marginTop: '2rem', fontSize: '0.85rem', color: '#888', textAlign: 'center' }}>
-        🚧 Placeholder da Fase 4.1 — integração real completa
-      </p>
     </div>
   )
 }
-
-const containerStyle = { minHeight: '100vh', fontFamily: 'system-ui', background: '#f8fafc' } as const
-const headerStyle = { background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '1rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' } as const
-const navStyle = { display: 'flex', gap: '1rem', alignItems: 'center' } as const
-const linkStyle = { textDecoration: 'none', color: '#2563eb', fontWeight: 500 } as const
-const logoutBtn = { padding: '0.5rem 1rem', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' } as const
-const mainStyle = { maxWidth: '640px', margin: '2rem auto', padding: '0 1rem' } as const
-const cardStyle = { background: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1.5rem', marginBottom: '1.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' } as const
-const balanceStyle = { fontSize: '2.5rem', fontWeight: 700, color: '#16a34a', margin: '0.5rem 0' } as const
-const actionsStyle = { display: 'flex', gap: '1rem' } as const
-const actionBtn = { flex: 1, padding: '1rem', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '1rem', cursor: 'pointer' } as const
-const errorStyle = { color: '#991b1b', background: '#fef2f2', border: '1px solid #fecaca', padding: '0.75rem', borderRadius: '4px', marginTop: '1rem' } as const
-
-// Estilos dos modais
-const modalOverlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' } as const
-const modalContent = { background: '#fff', borderRadius: '10px', padding: '1.5rem', width: '100%', maxWidth: '400px', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' } as const
-const formStyle = { display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' } as const
-const fieldStyle = { display: 'flex', flexDirection: 'column', gap: '0.35rem' } as const
-const inputStyle = { padding: '0.6rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '1rem' } as const
-const modalActions = { display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' } as const
-const cancelBtn = { padding: '0.6rem 1rem', background: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer' } as const
-const confirmBtn = { padding: '0.6rem 1rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 500 } as const
