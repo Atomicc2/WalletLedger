@@ -37,6 +37,8 @@ public class SecurityConfig {
 
             // 3. Regras de autorização por URL
             .authorizeHttpRequests(authorize -> authorize
+                // Health checks do Actuator (Render monitora liveness/readiness)
+                .requestMatchers("/actuator/health/**").permitAll()
                 // Permite cadastro de novos usuários sem autenticação prévia
                 .requestMatchers(HttpMethod.POST, "/api/users").permitAll()
                 // Futura rota de login pública
