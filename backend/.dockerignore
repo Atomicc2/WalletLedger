@@ -1,0 +1,38 @@
+# Build artifacts
+target/
+*.jar
+*.war
+*.class
+
+# Maven wrapper
+.mvn/
+mvnw
+mvnw.cmd
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Docker
+docker-compose.yml
+docker-compose.*.yml
+Dockerfile
+.dockerignore
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test reports (generated during build, not needed in image)
+**/surefire-reports/
+**/failsafe-reports/
