@@ -80,6 +80,14 @@ O **WalletLedger** é um sistema financeiro focado em **integridade contábil e 
 
 ---
 
+## 🔄 Fluxo da Arquitetura
+
+O diagrama abaixo ilustra como os componentes se comunicam — o **`LedgerService.settle()`** é o coração compartilhado entre webhook e worker, garantindo idempotência por estado (`PENDING`).
+
+![Fluxo da Arquitetura](./imagens-readme/Fluxograma%20da%20Arquitetura.png)
+
+---
+
 ## 📂 Estrutura do Projeto
 
 ```
