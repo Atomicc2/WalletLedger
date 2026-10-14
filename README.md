@@ -1,6 +1,10 @@
 # 💰 WalletLedger
 
-> Carteira digital moderna com **ledger de partidas dobradas (dupla entrada contábil)**, concorrência pessimista, idempotência e liquidação assíncrona (webhook + fila).
+> **Projeto pessoal de aprendizagem.** O foco principal é praticar lógica de backend, regras financeiras, persistência e segurança de APIs. A interface é propositalmente simples: além de login, cadastro e consulta de saldo/extrato, oferece somente duas operações financeiras — depósito e transferência.
+>
+> **Protótipo educacional, não serviço financeiro pronto para produção.** O projeto foi desenvolvido com forte apoio de IA e não passou por auditoria independente, pentest ou revisão profissional de segurança. Apesar das proteções implementadas, ainda pode conter vulnerabilidades, especialmente porque o autor não tem experiência profissional em segurança. Use apenas dados fictícios e não movimente dinheiro real. Os controles descritos abaixo são exercícios de aprendizagem, não uma certificação de segurança.
+
+Carteira digital experimental com **ledger de partidas dobradas**, concorrência pessimista, idempotência e liquidação assíncrona (webhook + fila).
 
 ![Java](https://img.shields.io/badge/Java-21-E76F00?logo=openjdk&logoColor=white)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4.0-6DB33F?logo=springboot&logoColor=white)
@@ -14,13 +18,15 @@
 
 ## 📌 Sobre o Projeto
 
-O **WalletLedger** é um sistema financeiro focado em **integridade contábil e alta confiabilidade**. Diferente de sistemas ingênuos que apenas somam ou subtraem saldos em uma coluna (`UPDATE accounts SET balance = balance + X`), o WalletLedger implementa um **ledger imutável de dupla entrada (double-entry bookkeeping)**:
+O **WalletLedger** é um projeto pessoal feito para aprender e exercitar conceitos de backend. O trabalho se concentra na lógica da API e do ledger; o frontend funciona como uma demonstração simples do fluxo, sem pretensão de ser uma interface completa de produto.
+
+O backend implementa um **ledger de dupla entrada (double-entry bookkeeping)** como exercício de integridade contábil:
 
 - Todo movimento financeiro possui uma **origem** (débito) e um **destino** (crédito).
 - A soma algébrica de débitos e créditos de qualquer transação é rigorosamente **ZERO**.
 - O saldo de uma conta é **calculado** a partir do histórico de lançamentos (`SUM`), nunca "mutado".
 
-É um projeto de estudo com filosofia **IA-First**: o agente de IA implementa, o desenvolvedor atua como tech lead revisando cada decisão arquitetural. A fonte única da verdade (estado, roadmap e padrões) está no **[`AGENTS.md`](./AGENTS.md)**.
+O desenvolvimento contou com forte apoio de ferramentas de IA. As decisões e o código devem ser entendidos como material de estudo sujeito a revisão; a participação da IA não substitui revisão técnica independente, especialmente de segurança. O **[`AGENTS.md`](./AGENTS.md)** registra o estado e as decisões do projeto.
 
 ---
 
@@ -41,11 +47,11 @@ O **WalletLedger** é um sistema financeiro focado em **integridade contábil e 
 - [x] **Autorização de dono-de-conta** (`OwnershipGuard`) — bloqueio de IDOR em todas as rotas
 - [x] **Testes automatizados** (unitários, slice JPA e integração) — **61 testes**
 
-### Frontend (Fase 4 — Concluída)
+### Frontend (demonstração enxuta)
 - [x] **Setup** Vite + React 19 + TypeScript + React Router
 - [x] **Autenticação** Axios + JWT interceptor (request/response) + CORS configurado
 - [x] **Login/Cadastro** reais com validação, toast e redirecionamento
-- [x] **Dashboard** com saldo real, modais de Depositar/Transferir, idempotência
+- [x] **Dashboard simples** com saldo e as duas ações financeiras: Depositar e Transferir
 - [x] **Extrato** paginado com filtros (tipo, período) e formatação pt-BR
 - [x] **Design System** Tailwind CSS v4 + componentes reutilizáveis (Button, Input, Select, Modal, Card, Badge)
 - [x] **Guarda de rotas** (`RequireAuth`) + logout com limpeza de token
@@ -64,7 +70,7 @@ O **WalletLedger** é um sistema financeiro focado em **integridade contábil e 
 | **Qualidade** | Lombok · Jakarta Bean Validation · JUnit 5 · Mockito · H2 (testes) |
 | **Build** | Maven (usar `mvn` do sistema — o wrapper `./mvnw` está incompleto) |
 | **Frontend** | React (Vite + TypeScript + React Router + Tailwind) — *Fase 4* |
-| **Deploy planejado** | Backend: Render/Railway · Banco: Neon/Supabase · Frontend: Vercel |
+| **Deploy de demonstração** | [Frontend: Vercel](https://wallet-ledger-liard.vercel.app) · [API: Render](https://walletledger-api.onrender.com) · Banco: Supabase PostgreSQL |
 
 ---
 
@@ -95,22 +101,28 @@ WalletLedger/
 ├── AGENTS.md                  # Fonte única da verdade (estado, roadmap, padrões)
 ├── LICENSE.md                 # Licença MIT
 ├── docker-compose.yml         # PostgreSQL 16 + pgAdmin
-└── backend/
-    ├── pom.xml
+├── backend/
+│   ├── pom.xml
+│   └── src/
+│       ├── main/java/com/API/walletLedger/
+│       │   ├── config/        # SecurityConfig, JwtAuthenticationFilter, OwnershipGuard
+│       │   ├── controller/    # Users, Auth, Transactions, Accounts, Webhooks
+│       │   ├── domain/        # User, Account, Transaction, LedgerEntry + enums
+│       │   ├── dto/           # Requests/Responses (records)
+│       │   ├── exception/     # GlobalExceptionHandler (RFC 7807)
+│       │   ├── repository/    # Spring Data + queries JPQL agregadas
+│       │   ├── service/       # LedgerService, JwtService, AuthService, UserService
+│       │   └── worker/        # PendingSettlementWorker (@Scheduled)
+│       ├── main/resources/
+│       │   ├── application.properties
+│       │   └── db/migration/  # V1..V5 (Flyway)
+│       └── test/java/         # 61 testes (unit, slice JPA, integração)
+└── frontend/                  # Vite + React + TypeScript + Tailwind
     └── src/
-        ├── main/java/com/API/walletLedger/
-        │   ├── config/        # SecurityConfig, JwtAuthenticationFilter, OwnershipGuard
-        │   ├── controller/    # Users, Auth, Transactions, Accounts, Webhooks
-        │   ├── domain/        # User, Account, Transaction, LedgerEntry + enums
-        │   ├── dto/           # Requests/Responses (records)
-        │   ├── exception/     # GlobalExceptionHandler (RFC 7807)
-        │   ├── repository/    # Spring Data + queries JPQL agregadas
-        │   ├── service/       # LedgerService, JwtService, AuthService, UserService
-        │   └── worker/        # PendingSettlementWorker (@Scheduled)
-        ├── main/resources/
-        │   ├── application.properties
-        │   └── db/migration/  # V1..V5 (Flyway)
-        └── test/java/         # 61 testes (unit, slice JPA, integração)
+        ├── components/        # Guard de autenticação e componentes UI
+        ├── context/           # Toasts
+        ├── pages/             # Login, cadastro, dashboard e extrato
+        └── services/          # Cliente HTTP e token
 ```
 
 ---
@@ -164,26 +176,26 @@ cd frontend
 npm run build     # gera pasta dist/ otimizada (tsc + vite build)
 ```
 
-> 🔗 **CORS** já configurado no backend para permitir `http://localhost:5173`. Se mudar a porta do Vite, atualize `SecurityConfig.corsConfigurationSource()`.
+> 🔗 **CORS** permite `http://localhost:5173` por padrão no desenvolvimento. Em produção, configure `CORS_ORIGIN` na Render com a origem exata do frontend (por exemplo, `https://wallet-ledger-liard.vercel.app`, sem barra final).
 
 ### ⚙️ Configurações principais (`backend/src/main/resources/application.properties`)
 
 | Propriedade | Valor (dev) | Descrição |
 |---|---|---|
 | `spring.datasource.*` | `localhost:5432/walletledger` | Conexão com o PostgreSQL do compose |
-| `jwt.secret` | chave Base64 (256 bits) | Assinatura HMAC-SHA256 do token |
+| `jwt.secret` (`JWT_SECRET`) | chave Base64 (256 bits) | Assinatura HMAC-SHA256 do token |
 | `jwt.expiration-ms` | `86400000` | Expiração do token (24h) |
-| `wallet.webhook.secret` | `dev-webhook-secret-local` | Esperado no header `X-Webhook-Secret` |
+| `wallet.webhook.secret` (`WALLET_WEBHOOK_SECRET`) | `dev-webhook-secret-local` | Esperado no header `X-Webhook-Secret` |
 | `wallet.worker.poll-interval-ms` | `10000` | Intervalo do worker (espera 10s após cada execução) |
 | `wallet.worker.settle-after-seconds` | `30` | Carência mínima do `PENDING` antes de liquidar |
 
-> ⚠️ Segredos de desenvolvimento estão versionados por praticidade. **Em produção** eles vêm de variáveis de ambiente/secrets manager, e o webhook idealmente usa assinatura HMAC-SHA256 do corpo.
+> ⚠️ Há valores padrão de desenvolvimento versionados em `application.properties`. Nunca os use em produção. Sobrescreva `JWT_SECRET` e `WALLET_WEBHOOK_SECRET` na Render; o nome `WEBHOOK_SECRET` sozinho não corresponde à propriedade `wallet.webhook.secret` usada pelo Spring. Para um sistema real, também seria necessário rever armazenamento, rotação e acesso a segredos e autenticar webhooks com assinatura HMAC do corpo.
 
 ---
 
 ## 🔌 API Reference
 
-Base URL: `http://localhost:8080`
+Base URL local: `http://localhost:8080` · API publicada: `https://walletledger-api.onrender.com`
 
 | Método | Rota | Acesso | Descrição |
 |---|---|---|---|
@@ -199,6 +211,8 @@ Base URL: `http://localhost:8080`
 | `GET` | `/api/accounts/{id}/balance` | JWT + dono | Saldo de conta específica (por UUID) |
 | `GET` | `/api/accounts/{id}/statement` | JWT + dono | Extrato completo (legado, sem paginação) |
 | `POST` | `/api/webhooks/payment` | `X-Webhook-Secret` | Liquidação (`APPROVED`/`REJECTED`) |
+| `GET` | `/actuator/health` | Público | Estado geral de saúde da API |
+| `GET` | `/actuator/health/liveness` | Público | Health check de liveness |
 
 ### Exemplos
 
@@ -267,15 +281,19 @@ cd backend && mvn test
 
 ---
 
-## 🔐 Segurança
+## 🔐 Segurança e limitações
+
+Este repositório **não deve ser tratado como seguro para uso financeiro real**. O código foi feito com apoio de IA, o autor não é especialista em segurança e não houve auditoria independente, modelagem formal de ameaças nem teste de invasão. Podem existir vulnerabilidades no código, nas dependências, na configuração de deploy ou na operação, inclusive em áreas que parecem cobertas por testes.
 
 **Implementado:**
 - Senhas com **BCrypt** (nunca em texto puro) e API **stateless** (CSRF desabilitado por ser API com Bearer).
 - **JWT** com assinatura HMAC-SHA256 e validação de expiração.
 - **Webhook** com secret em header comparado em **tempo constante** (`MessageDigest.isEqual` — proteção contra *timing attack*).
-- **Autorização de dono-de-conta** (`OwnershipGuard`): corrigido o **IDOR** em todas as rotas — saldo/extrato só do dono, transferência exige origem própria, estorno exige participação na transação.
+- **Verificações de propriedade** (`OwnershipGuard`) em rotas de saldo/extrato, transferência e estorno para cobrir cenários conhecidos de acesso indevido entre contas.
 
-**Dívidas conhecidas (futuro):** rate limiting no login, papéis/RBAC, secrets via variáveis de ambiente + assinatura HMAC do webhook.
+Esses controles reduzem alguns riscos conhecidos, mas **não provam que o sistema esteja protegido**. Use exclusivamente dados fictícios; não cadastre informações pessoais reais nem use dinheiro real. Os testes automatizados verificam comportamentos selecionados e não substituem uma revisão de segurança.
+
+**Limitações e trabalhos de segurança ainda possíveis:** limitação de tentativas de login, papéis/RBAC, assinatura HMAC com proteção contra repetição de webhooks, gestão e rotação de segredos, revisão das dependências, logs de auditoria e avaliação independente de segurança.
 
 ---
 
@@ -316,3 +334,17 @@ Os commits seguem o padrão **[Conventional Commits](https://www.conventionalcom
 ## 📄 Licença
 
 Este projeto está sob a licença **MIT** — veja [`LICENSE.md`](./LICENSE.md).
+
+---
+
+## 🌱 Ideias para quando o projeto continuar
+
+Este espaço fica aberto para escolher próximos exercícios conforme o interesse, sem compromisso de transformar o projeto em um produto completo:
+
+- [ ] Revisar e endurecer a configuração de segredos e autenticação de webhooks.
+- [ ] Adicionar rate limiting e proteção contra tentativas repetidas de login.
+- [ ] Explorar papéis e permissões (RBAC) ou melhorar a trilha de auditoria.
+- [ ] Melhorar observabilidade, alertas e documentação do deploy.
+- [ ] Expandir a interface somente se fizer sentido para os objetivos de aprendizagem.
+
+O WalletLedger continua sendo um espaço para aprender, registrar decisões e evoluir um bloco de cada vez.
