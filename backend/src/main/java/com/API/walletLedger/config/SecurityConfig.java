@@ -25,10 +25,13 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthFilter;
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+        HttpSecurity http,
+        CorsConfigurationSource corsConfigurationSource
+    ) throws Exception {
         return http
             // CORS deve vir ANTES do csrf/authorizeHttpRequests para que preflight (OPTIONS) passe
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            .cors(cors -> cors.configurationSource(corsConfigurationSource))
 
             // 1. Desabilita proteção CSRF (Cross-Site Request Forgery)
             .csrf(csrf -> csrf.disable())
