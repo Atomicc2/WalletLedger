@@ -56,6 +56,16 @@ O desenvolvimento contou com forte apoio de ferramentas de IA. As decisões e o 
 - [x] **Design System** Tailwind CSS v4 + componentes reutilizáveis (Button, Input, Select, Modal, Card, Badge)
 - [x] **Guarda de rotas** (`RequireAuth`) + logout com limpeza de token
 
+### Telas da demonstração
+
+**Login**
+
+![Tela de login do WalletLedger](./imagens-readme/Captura%20de%20tela%202026-10-13%20214550.png)
+
+**Dashboard** — saldo e ações de depósito e transferência
+
+![Dashboard do WalletLedger](./imagens-readme/Captura%20de%20tela%202026-10-13%20214644.png)
+
 ---
 
 ## 🛠️ Stack Tecnológica
