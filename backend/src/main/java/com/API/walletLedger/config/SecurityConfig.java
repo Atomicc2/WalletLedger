@@ -2,6 +2,7 @@ package com.API.walletLedger.config;
 
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -74,12 +75,15 @@ public class SecurityConfig {
      * Por que precisa? Navegador bloqueia requests cross-origin (porta diferente)
      * a menos que o servidor responda headers Access-Control-Allow-Origin, etc.
      *
-     * Em produção: troque "http://localhost:5173" pela URL real do frontend (ex.: Vercel).
+     * Em produção, CORS_ORIGIN define a URL do frontend (ex.: domínio da Vercel).
+     * Sem essa variável, mantém-se localhost:5173 para desenvolvimento local.
      */
     @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
+    public CorsConfigurationSource corsConfigurationSource(
+        @Value("${CORS_ORIGIN:http://localhost:5173}") String corsOrigin
+    ) {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:5173"));
+        config.setAllowedOrigins(List.of(corsOrigin));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         config.setAllowCredentials(true); // necessário para cookies; com Bearer token é opcional mas inofensivo
